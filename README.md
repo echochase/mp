@@ -1,1 +1,1 @@
-For projects with SocketIO involvement.
+Code for the Multiplayer Web Game Double Bluff.
