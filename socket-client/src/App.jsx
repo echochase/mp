@@ -13,8 +13,10 @@ export default function App() {
   const [name, setName] = useState(localStorage.getItem("name") || "");
   const [room, setRoom] = useState(localStorage.getItem("room") || "");
 
+  const backend = import.meta.env.VITE_BACKEND_URL;
+
   useEffect(() => {
-    const newSocket = io("http://localhost:3000");
+    const newSocket = io(backend);
     setSocket(newSocket);
 
     return () => newSocket.disconnect();
