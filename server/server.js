@@ -13,8 +13,6 @@ const io = new Server(server, {
   }
 });
 
-console.log(process.env.CLIENT_ORIGIN);
-
 server.listen(3000, () => {
   console.log('Server listening on port 3000');
 });
@@ -48,62 +46,90 @@ let rooms = {};
  * }
  */
 
+/**
+ * DECLARED ACTIONS
+ * playerName: string,
+ * actions: string[]
+ */
+
 function emitNextTurn(roomId) {
-  const roomData = rooms[roomId];
-  if (!roomData || roomData.players.length === 0) return;
+  const room = rooms[roomId];
+  console.log("Turn " + room.turnCount, ": running emitnextturn");
+  if (!room || room.players.length === 0) return;
 
-  const logs = processTurn(roomId);
-  logs.forEach(msg => io.to(roomId).emit("turn-log", msg));
-  io.to(roomId).emit("turn-log", "---");
+  const totalPlayers = room.players.length;
 
-  const totalPlayers = roomData.players.length;
-  let nextTurn = (roomData.playerTurn + 1) % totalPlayers;
-  let safety = 0;
-
-  while (safety < totalPlayers) {
-    const player = roomData.players[nextTurn];
+  for (let i = 0; i < totalPlayers; i++) {
+    const index = (room.playerTurn + 1 + i) % totalPlayers;
+    const player = room.players[index];
     const isConnected = io.sockets.sockets.get(player.socketId);
+    
     if (isConnected) {
-      roomData.playerTurn = nextTurn;
-      roomData.turnCount += 1;
-      roomData.actions.push([]);
-
-      // Distribute power-ups every odd-numbered turn except turn 1
-      if (roomData.turnCount % 2 === 1) {
-        roomData.players.forEach(p => {
+      room.playerTurn = index;
+      room.turnCount += 1;
+      room.turnStage = "declaration";
+      room.declaredActions = {};
+      room.chosenActions = {};
+      io.to(roomId).emit("stage-update", "declaration");
+  
+      if (room.turnCount % 2 === 1 && room.turnCount > 1) {
+        room.players.forEach(p => {
+          if (p.hp <= 0) return;
           const power = rollPowerUp();
           if (!p.powerUps[power]) p.powerUps[power] = 0;
           p.powerUps[power]++;
-          io.to(p.socketId).emit("power-up-received", power);
+          io.to(p.socketId).emit("power-up-received", p.name, power);
         });
       }
-
+  
       io.to(roomId).emit("next-turn", {
-        turnCount: roomData.turnCount,
+        turnCount: room.turnCount,
       });
-      io.to(roomId).emit("turn-log", `Turn ${roomData.turnCount} has begun`);
+  
+      io.to(roomId).emit("turn-log", `[Turn ${room.turnCount} has begun]`);
       return;
     }
-    nextTurn = (nextTurn + 1) % totalPlayers;
-    safety++;
   }
 
   console.log(`No connected players left to take the next turn in room ${roomId}`);
 }
 
 function rollPowerUp() {
+  let powerUp;
   const roll = Math.random();
-  if (roll < 0.4) return "special";
-  if (roll < 0.7) return "heal";
-  if (roll < 0.85) return "cruelty";
-  return "prowess";
+  if (roll < 0.4) powerUp = "special";
+  else if (roll < 0.7) powerUp = "heal";
+  else if (roll < 0.85) powerUp = "cruelty";
+  else powerUp = "prowess";
+  return powerUp;
 }
 
-function processTurn(roomId) {
+function tryUsePowerUp(player, actionType, targetName = null) {
+  if (!player || player.hp <= 0) return { success: false, result: "invalid player" };
+
+  const powerUps = player.powerUps || {};
+
+  switch (actionType) {
+    case "prowess":
+    case "heal":
+    case "special":
+    case "cruelty":
+      if ((powerUps[actionType] || 0) > 0) {
+        powerUps[actionType] -= 1;
+        return { success: true, result: actionType === "heal" ? "healed" : actionType === "prowess" ? "ready" : `${actionType} used`, targetName };
+      } else {
+        return { success: false, result: `no ${actionType}` };
+      }
+
+    default:
+      // Non-power-up actions like "attack" or "defend"
+      return { success: true, result: actionType }; 
+  }
+}
+
+function processTurn(roomId, currentActions) {
   const roomData = rooms[roomId];
-  const turnIndex = roomData.turnCount - 1;
-  if (turnIndex === 0) io.to(roomId).emit("turn-log", `[Turn 1 has begun]`);
-  const currentActions = roomData.actions[turnIndex];
+  if (roomData.turnCount === 1) io.to(roomId).emit("turn-log", `[Turn 1 has begun]`);  
 
   const energyShields = new Set();
   const defends = new Set();
@@ -112,7 +138,6 @@ function processTurn(roomId) {
   const eliminatedPlayers = new Set();
   const healedPlayers = new Set();
   const logs = [];
-
   // Step 1: Setup initial flags
   currentActions.forEach(action => {
     const player = roomData.players.find(p => p.name === action.playerName);
@@ -129,8 +154,9 @@ function processTurn(roomId) {
     }
 
     if (action.action === "prowess" && action.targetName) {
-      prowessMap[action.playerName] = action.targetName;
-      action.result = 'ready';
+      const result = tryUsePowerUp(player, "prowess", action.targetName);
+      action.result = result.result;
+      if (result.success) prowessMap[action.playerName] = action.targetName;
     }
   });
 
@@ -138,12 +164,15 @@ function processTurn(roomId) {
   currentActions.forEach(action => {
     if (action.action === "heal") {
       const player = roomData.players.find(p => p.name === action.playerName);
-      if (!player || player.hp <= 0) return;
+      if (!player) return;
 
-      player.hp += 2;
-      action.result = "healed";
-      healedPlayers.add(player.name);
-    }
+      const result = tryUsePowerUp(player, "heal");
+      action.result = result.result;
+      if (result.success) {
+        player.hp += 2;
+        healedPlayers.add(player.name);
+      }
+    }    
   });
 
   // Step 3: Process all attacks
@@ -163,9 +192,15 @@ function processTurn(roomId) {
     }
 
     const wasBlockedByProwess = prowessMap[target.name] === attacker.name;
-    const wasBlockedByEnergyShield = energyShields.has(target.name);
+    const wasBlockedByEnergyShield = energyShields.has(target.name) && action.action !== 'attack';
     const wasBlockedByDefend = defends.has(target.name) && action.action === 'attack';
 
+    if (action.action === "special" || action.action === "cruelty") {
+      const result = tryUsePowerUp(attacker, action.action);
+      action.result = result.result;
+      if (!result.success) return;
+    }
+    
     const damage = action.action === "attack" ? 1 : (action.action === "special" ? 2 : null);
     const isCruelty = action.action === "cruelty";
 
@@ -245,7 +280,6 @@ function processTurn(roomId) {
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
-
   socket.on('create-room', (room, playerName) => {
     rooms[room] = {
       id: room,
@@ -267,7 +301,6 @@ io.on('connection', (socket) => {
       started: false,
       playerTurn: 0,
       turnCount: 0,
-      actions: [[]],
     };
     socket.join(room);
     io.to(room).emit('new-player', rooms[room].players.map(p => ({ name: p.name, hp: p.hp })));
@@ -315,13 +348,88 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on("declare-action", (roomId, playerName, actions) => {
+    const room = rooms[roomId];
+    if (!room || room.turnStage !== "declaration") return;
+    
+    if (room.declaredActions[playerName]) return;
+  
+    room.declaredActions[playerName] = actions;
+  
+    const allDeclared = Object.values(room.players).every(
+      p => room.declaredActions[p.name]?.length === 3
+    );
+  
+    if (allDeclared) {
+      room.turnStage = "execution";
+      io.to(roomId).emit("stage-update", "execution");
+      io.to(roomId).emit("turn-log", "All actions declared. Entering execution stage.");
+  
+      // Emit only action types to the frontend
+      const actionTypesOnly = {};
+      for (const [player, acts] of Object.entries(room.declaredActions)) {
+        actionTypesOnly[player] = acts.map(a => a.actionType);
+      }
+  
+      io.to(roomId).emit("all-declared", actionTypesOnly);
+    }
+  });  
+
+  socket.on("execute-actions", (roomId, playerName, selections) => {
+    const room = rooms[roomId];
+    if (!room || room.turnStage !== "execution") return;
+    if (!Array.isArray(selections) || selections.length !== 2) return;
+  
+    const declared = room.declaredActions[playerName];
+    if (!declared || declared.length !== 3) return;
+  
+    const chosen = [];
+  
+    for (const sel of selections) {
+      chosen.push({
+        playerName,
+        action: sel.actionType,
+        targetName: sel.target,
+      });
+    }
+  
+    room.chosenActions[playerName] = chosen;
+  
+    const allChosen = room.players.every(
+      p => Array.isArray(room.chosenActions[p.name]) && room.chosenActions[p.name].length === 2
+    );
+  
+    if (allChosen) {
+      room.turnStage = "declaration";
+      io.to(roomId).emit("stage-update", "declaration");
+    
+      const actionsToProcess = Object.values(room.chosenActions).flat();
+    
+      try {
+        const logs = processTurn(roomId, actionsToProcess);
+        if (!Array.isArray(logs)) {
+          console.log("processTurn() returned undefined or invalid value!", logs);
+        } else {
+          logs.forEach(msg => io.to(roomId).emit("turn-log", msg));
+        }
+        io.to(roomId).emit("turn-log", "---");
+        emitNextTurn(roomId);
+      } catch (err) {
+        console.log("Error during processTurn or emitNextTurn:", err);
+        io.to(roomId).emit("turn-log", "⚠️ Error occurred during turn processing.");
+      }
+    }    
+  });
+
   socket.on('start-game', (room, name) => {
     const roomData = rooms[room];
     if (roomData && roomData.players.length >= 2 && name === roomData.leader) {
       roomData.started = true;
       roomData.playerTurn = 0;
       roomData.turnCount = 1;
-      roomData.actions = [[]];
+      roomData.turnStage = "declaration";
+      roomData.declaredActions = {};
+      roomData.chosenActions = {};
       io.to(room).emit('start-confirm');
       console.log(`Room ${room} started by ${name}.`);
       io.to(room).emit('next-turn', {
@@ -338,29 +446,6 @@ io.on('connection', (socket) => {
       });
     }
   });
-
-  socket.on('send-command', (room, playerName, action, targetName) => {
-    const roomData = rooms[room];
-    if (!roomData) return;
-  
-    const playerIndex = roomData.players.findIndex(p => p.name === playerName);
-    if (playerIndex === -1) return;
-  
-    const player = roomData.players[playerIndex];
-  
-    // Skip command if player is eliminated
-    if (player.hp <= 0) return;
-  
-    player.commands.push(action);
-    roomData.actions[roomData.turnCount - 1].push({ playerName, action, targetName });
-  
-    // Only count alive players for turn completion
-    const alivePlayerCount = roomData.players.filter(p => p.hp > 0).length;
-    if (roomData.actions[roomData.turnCount - 1].length === alivePlayerCount) {
-      emitNextTurn(room);
-    }
-  });
-  
 
   socket.on("get-players", (room) => {
     const roomData = rooms[room];

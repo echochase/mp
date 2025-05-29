@@ -1,6 +1,6 @@
 import "../styles/players.css";
 
-export const Players = ({ players, you }) => {
+export const Players = ({ players, you, totalDeclarations, stage }) => {
   const radius = 250;
 
   const angleMap = {
@@ -12,6 +12,8 @@ export const Players = ({ players, you }) => {
 
   const playerCount = players.length;
   const angles = angleMap[playerCount] || [];
+
+  const declarationsMap = Object.fromEntries(totalDeclarations);
 
   return (
     <div className="players-circle">
@@ -31,17 +33,24 @@ export const Players = ({ players, you }) => {
         if (hp <= 0) {
           className += " eliminated";
         }
-        
+
         return (
-          <div key={name} className={className} style={{
-            transform: `translate(${x}px, ${y}px)`
-          }}>
+          <div key={name} className={className} style={{ transform: `translate(${x}px, ${y}px)` }}>
             <div>{name}</div>
             <div className="healthbar">
               {[0, 1, 2].map(i => (
                 <div key={i} className={`hp-segment ${i < hp ? 'filled' : 'empty'}`} />
               ))}
             </div>
+            {stage === "execution" && declarationsMap[name] && (
+              <div className="player-declarations">
+                {declarationsMap[name].map((a, i) => (
+                  <div key={i} style={{ fontSize: "12px" }}>
+                    {a}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
