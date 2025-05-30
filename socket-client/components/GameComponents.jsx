@@ -23,6 +23,28 @@ export const WinningModal = ({ end, setEnd, winner }) => {
   )
 }
 
+export const LogModal = ({ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner }) => {
+  return (
+    <Modal open={openLog} onClose={() => setOpenLog(false)}>
+      <div className="modal center">
+        <h3>Game Room: {room}</h3>
+        <strong>Turn: {turnCount}, Stage: {stage}</strong>
+        <strong>You: {name}</strong>
+        <div className="mobile-log">
+          {turnLogs.map((log, index) => (
+            <div key={index}>{log}</div>
+          ))}
+        </div>
+        {winner !== "" && (
+          <div className="center">
+            {winner ? <h3>Result: {winner} wins</h3> : <h3>Result: Draw</h3>}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 export const TargetMenu = ({ anchorEl, open, closeTargetMenu, players, name }) => {
   return (
     <Menu

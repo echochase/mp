@@ -7,9 +7,12 @@ import {
   ActionButtons,
   ChooseDeclarations,
   ChooseExecutions,
+  LogModal,
   TargetMenu,
   WinningModal,
 } from "../components/GameComponents";
+import { useMediaQuery } from "@mui/material";
+import ListIcon from "@mui/icons-material/List";
 
 export const Game = ({ socket, name, room }) => {
   const [turnCount, setTurnCount] = useState(0);
@@ -27,6 +30,9 @@ export const Game = ({ socket, name, room }) => {
   const [selectedExecutions, setSelectedExecutions] = useState([]);
   const [playerAnimationQueues, setPlayerAnimationQueues] = useState({});
   const [activeAnimations, setActiveAnimations] = useState({});
+  const [openLog, setOpenLog] = useState(false);
+  
+  const isMobile = useMediaQuery('(max-width:600px)');
 
   const queueAnimation = (playerName, animationType) => {
     setPlayerAnimationQueues(prev => {
@@ -292,6 +298,11 @@ export const Game = ({ socket, name, room }) => {
 
   return (
     <div className="center">
+      {isMobile ?
+      <ListIcon
+        sx={{ position: "absolute", left: "30px", top: "30px", cursor: "pointer", color: "white", width: "50px", height: "50px" }}
+        onClick={() => setOpenLog(true)}
+      /> : 
       <div className="corner-info">
         <p style={{ fontSize: "12.5px" }}>Game Room: {room}</p>
         <div className="game-info">
@@ -309,38 +320,40 @@ export const Game = ({ socket, name, room }) => {
             {winner ? <h3>Result: {winner} wins</h3> : <h3>Result: Draw</h3>}
           </div>
         )}
+      </div>}
+      <div className={`center ${!isMobile ? "gameplay" : ""}`}>
+        <Players
+          players={players}
+          you={name}
+          totalDeclarations={totalDeclarations}
+          stage={stage}
+          blockAnimations={activeAnimations}
+        />
+
+        {stage === "declaration" ? (
+          <ChooseDeclarations {...{ confirmed, declaredActions, declareAction, deleteAction, name }} />
+        ) : (
+          <ChooseExecutions {...{ confirmed, declaredActions, selectedExecutions, confirmExecution, executeAction }} />
+        )}
+        {actionsError && (
+          <div style={{ color: "red" }}>Please declare exactly 3 actions!</div>
+        )}
+        {isEliminated ? (
+          <p style={{ color: "red", marginBottom: "10px" }}>
+            You have been eliminated and cannot take actions.
+          </p>
+        ) : (
+          stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
+        )}
+
+        <button className="menu-button" onClick={leaveGame}>
+          Leave Game
+        </button>
+
+        <TargetMenu {...{ anchorEl, open, closeTargetMenu, players, name }} />
+        <WinningModal {...{ end, setEnd, winner }} />
+        <LogModal {...{ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner }} />
       </div>
-
-      <Players
-        players={players}
-        you={name}
-        totalDeclarations={totalDeclarations}
-        stage={stage}
-        blockAnimations={activeAnimations}
-      />
-
-      {stage === "declaration" ? (
-        <ChooseDeclarations {...{ confirmed, declaredActions, declareAction, deleteAction, name }} />
-      ) : (
-        <ChooseExecutions {...{ confirmed, declaredActions, selectedExecutions, confirmExecution, executeAction }} />
-      )}
-      {actionsError && (
-        <div style={{ color: "red" }}>Please declare exactly 3 actions!</div>
-      )}
-      {isEliminated ? (
-        <p style={{ color: "red", marginBottom: "10px" }}>
-          You have been eliminated and cannot take actions.
-        </p>
-      ) : (
-        stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
-      )}
-
-      <button className="menu-button" onClick={leaveGame}>
-        Leave Game
-      </button>
-
-      <TargetMenu {...{ anchorEl, open, closeTargetMenu, players, name }} />
-      <WinningModal {...{ end, setEnd, winner }} />
     </div>
   );
 };

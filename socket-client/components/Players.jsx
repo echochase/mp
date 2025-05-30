@@ -1,6 +1,10 @@
+import { useMediaQuery } from "@mui/material";
 import "../styles/players.css";
 
 export const Players = ({ players, you, totalDeclarations, stage, blockAnimations }) => {
+  const isMobile = useMediaQuery('(max-width:600px)');
+  const radiusFactor = isMobile ? 0.3 : 0.45;
+
   const radius = 250;
 
   const angleMap = {
@@ -20,8 +24,8 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
         const { name, hp } = player;
         const angleDeg = angles[index];
         const angleRad = (angleDeg * Math.PI) / 180;
-        const x = radius * Math.cos(angleRad);
-        const y = radius * Math.sin(angleRad);
+        const x = radius * radiusFactor * Math.cos(angleRad);
+        const y = radius * radiusFactor * Math.sin(angleRad);
 
         let className = "player-tile";
         if (name === you) {
