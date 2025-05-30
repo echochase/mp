@@ -25,7 +25,19 @@ export const Game = ({ socket, name, room }) => {
   const [stage, setStage] = useState("declaration");
   const [totalDeclarations, setTotalDeclarations] = useState([]);
   const [selectedExecutions, setSelectedExecutions] = useState([]);
+  const [playerAnimationQueues, setPlayerAnimationQueues] = useState({});
+  const [activeAnimations, setActiveAnimations] = useState({});
 
+  const queueAnimation = (playerName, animationType) => {
+    setPlayerAnimationQueues(prev => {
+      const existing = prev[playerName] || [];
+      return {
+        ...prev,
+        [playerName]: [...existing, animationType]
+      };
+    });
+  };  
+  
   // Define power-up names
   const powerUps = ["special", "cruelty", "prowess", "heal"];
 
@@ -33,6 +45,32 @@ export const Game = ({ socket, name, room }) => {
   const navigate = useNavigate();
   const you = players.find((p) => p.name === name);
   const isEliminated = you?.hp === 0;
+  
+  useEffect(() => {
+    Object.entries(playerAnimationQueues).forEach(([player, queue]) => {
+      if (queue.length === 0 || activeAnimations[player]) return;
+  
+      const [nextAnimation, ...rest] = queue;
+  
+      setActiveAnimations(prev => ({
+        ...prev,
+        [player]: nextAnimation
+      }));
+  
+      setPlayerAnimationQueues(prev => ({
+        ...prev,
+        [player]: rest
+      }));
+  
+      setTimeout(() => {
+        setActiveAnimations(prev => {
+          const updated = { ...prev };
+          delete updated[player];
+          return updated;
+        });
+      }, 1000); // match with your animation duration
+    });
+  }, [playerAnimationQueues, activeAnimations]);  
 
   useEffect(() => {
     if (!socket || !room || !name) {
@@ -115,6 +153,22 @@ export const Game = ({ socket, name, room }) => {
     socket.on("all-declared", handleDeclarations);
     socket.on("player-eliminated", handlePlayerEliminated);
     socket.on("game-over", handleGameOver);
+    
+    socket.on("block-occurred", blocker => {
+      queueAnimation(blocker, "defend");
+    });
+    
+    socket.on("shield-occurred", blocker => {
+      queueAnimation(blocker, "shield");
+    });
+    
+    socket.on("prowess-occurred", user => {
+      queueAnimation(user, "prowess");
+    });
+    
+    socket.on("heal-occurred", user => {
+      queueAnimation(user, "heal");
+    });    
 
     socket.emit("get-current-turn", room, name);
     socket.emit("get-players", room);
@@ -129,6 +183,10 @@ export const Game = ({ socket, name, room }) => {
       socket.off("power-up-received", handlePowerUp);
       socket.off("player-eliminated", handlePlayerEliminated);
       socket.off("game-over", handleGameOver);
+      socket.off("block-occurred");
+      socket.off("shield-occurred");
+      socket.off("prowess-occurred");
+      socket.off("heal-occurred");
     };
   }, [socket, room, name, navigate]);
 
@@ -253,7 +311,14 @@ export const Game = ({ socket, name, room }) => {
         )}
       </div>
 
-      <Players players={players} you={name} totalDeclarations={totalDeclarations} stage={stage} />
+      <Players
+        players={players}
+        you={name}
+        totalDeclarations={totalDeclarations}
+        stage={stage}
+        blockAnimations={activeAnimations}
+      />
+
       {stage === "declaration" ? (
         <ChooseDeclarations {...{ confirmed, declaredActions, declareAction, deleteAction, name }} />
       ) : (

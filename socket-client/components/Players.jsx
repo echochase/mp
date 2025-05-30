@@ -1,6 +1,6 @@
 import "../styles/players.css";
 
-export const Players = ({ players, you, totalDeclarations, stage }) => {
+export const Players = ({ players, you, totalDeclarations, stage, blockAnimations }) => {
   const radius = 250;
 
   const angleMap = {
@@ -12,7 +12,6 @@ export const Players = ({ players, you, totalDeclarations, stage }) => {
 
   const playerCount = players.length;
   const angles = angleMap[playerCount] || [];
-
   const declarationsMap = Object.fromEntries(totalDeclarations);
 
   return (
@@ -35,7 +34,14 @@ export const Players = ({ players, you, totalDeclarations, stage }) => {
         }
 
         return (
-          <div key={name} className={className} style={{ transform: `translate(${x}px, ${y}px)` }}>
+          <div
+            key={name}
+            className={className}
+            style={{ transform: `translate(${x}px, ${y}px)`, position: "relative" }}
+          >
+            {blockAnimations?.[name] && (
+              <div className={`animation-pulse animation-${blockAnimations[name]}`} />
+            )}
             <div>{name}</div>
             <div className="healthbar">
               {[0, 1, 2].map(i => (

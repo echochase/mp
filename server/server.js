@@ -146,16 +146,19 @@ function processTurn(roomId, currentActions) {
     if (action.action === "defend") {
       defends.add(action.playerName);
       action.result = 'defended';
+      io.to(roomId).emit("block-occurred", action.playerName);
     }
 
     if (action.action === "energy-shield") {
       energyShields.add(action.playerName);
       action.result = 'shielded';
+      io.to(roomId).emit("shield-occurred", action.playerName);
     }
 
     if (action.action === "prowess" && action.targetName) {
       const result = tryUsePowerUp(player, "prowess", action.targetName);
       action.result = result.result;
+      io.to(roomId).emit("prowess-occurred", action.playerName);
       if (result.success) prowessMap[action.playerName] = action.targetName;
     }
   });
@@ -167,6 +170,7 @@ function processTurn(roomId, currentActions) {
       if (!player) return;
 
       const result = tryUsePowerUp(player, "heal");
+      io.to(roomId).emit("heal-occurred", action.playerName);
       action.result = result.result;
       if (result.success) {
         player.hp += 2;
@@ -205,6 +209,7 @@ function processTurn(roomId, currentActions) {
     const isCruelty = action.action === "cruelty";
 
     if (wasBlockedByProwess) {
+      console.log("checkpoint 1")
       action.result = "reflected";
       // Reflect the same damage
       const reflectedTarget = attacker;
@@ -212,11 +217,13 @@ function processTurn(roomId, currentActions) {
         reflectedTarget.hp = 0;
         eliminatedPlayers.add(reflectedTarget.name);
         io.to(roomId).emit("player-eliminated", reflectedTarget.name);
+        console.log("checkpoint 2")
       } else {
         reflectedTarget.hp = Math.max(0, reflectedTarget.hp - damage);
         if (reflectedTarget.hp === 0) {
           eliminatedPlayers.add(reflectedTarget.name);
           io.to(roomId).emit("player-eliminated", reflectedTarget.name);
+          console.log("checkpoint 3")
         }
       }
       return;
