@@ -31,6 +31,8 @@ export const Game = ({ socket, name, room }) => {
   const [playerAnimationQueues, setPlayerAnimationQueues] = useState({});
   const [activeAnimations, setActiveAnimations] = useState({});
   const [openLog, setOpenLog] = useState(false);
+  const [defenceWarning, setDefenceWarning] = useState(false);
+  const [defenceError, setDefenceError] = useState(false);
   
   const isMobile = useMediaQuery('(max-width:600px)');
 
@@ -98,7 +100,6 @@ export const Game = ({ socket, name, room }) => {
     };
 
     const handleDeclarations = (declarations) => {
-      console.log(declarations);
       setTotalDeclarations(Object.entries(declarations));
     };
 
@@ -129,7 +130,6 @@ export const Game = ({ socket, name, room }) => {
               ...p.powerUps,
               [power]: (p.powerUps?.[power] || 0) + 1,
             };
-            console.log(updatedPowerUps);
             return { ...p, powerUps: updatedPowerUps };
           }
           return p;
@@ -160,6 +160,14 @@ export const Game = ({ socket, name, room }) => {
     socket.on("player-eliminated", handlePlayerEliminated);
     socket.on("game-over", handleGameOver);
     
+    socket.on("attack-occurred", user => {
+      queueAnimation(user, "attack");
+    });
+
+    socket.on("special-occurred", user => {
+      queueAnimation(user, "special");
+    });
+
     socket.on("block-occurred", blocker => {
       queueAnimation(blocker, "defend");
     });
@@ -193,6 +201,8 @@ export const Game = ({ socket, name, room }) => {
       socket.off("shield-occurred");
       socket.off("prowess-occurred");
       socket.off("heal-occurred");
+      socket.off("attack-occurred");
+      socket.off("special-occurred");
     };
   }, [socket, room, name, navigate]);
 
@@ -201,6 +211,7 @@ export const Game = ({ socket, name, room }) => {
     setActionsError(false);
     socket.emit("declare-action", room, name, declaredActions);
     setConfirmed(true);
+    setDefenceWarning(false);
   };
 
   const closeTargetMenu = (targetName) => {
@@ -221,7 +232,6 @@ export const Game = ({ socket, name, room }) => {
   
     if (powerUps.includes(pendingAttackType)) {
       player.powerUps[pendingAttackType] -= 1;
-      console.log(player.powerUps);
     }
   
     setPendingAttackType(null);
@@ -229,17 +239,29 @@ export const Game = ({ socket, name, room }) => {
 
   const deleteAction = (index) => {
     if (confirmed) return;
+
     setActionsError(false);
-    setDeclaredActions((prev) => prev.filter((_, i) => i !== index));
+
+    const updatedDeclared = declaredActions.filter((_, i) => i !== index);
+    setDeclaredActions(updatedDeclared);
+
     const player = players.find(p => p.name === name);
     const actionType = declaredActions[index].actionType;
     if (powerUps.includes(actionType)) {
       player.powerUps[actionType]++;
-      console.log(player.powerUps);
     }
-  }
+
+    const hasDefend = updatedDeclared.some(a => a.actionType === "defend");
+    const hasShield = updatedDeclared.some(a => a.actionType === "energy-shield");
+    setDefenceWarning(hasDefend && hasShield);
+    setDefenceError(hasDefend && hasShield);
+  };
+
 
   const selectAction = (event, actionType) => {
+    setDefenceWarning(false); // clear old warning
+    setActionsError(false);   // clear old error
+
     if (declaredActions.length === 3) {
       setActionsError(true);
       return;
@@ -249,22 +271,28 @@ export const Game = ({ socket, name, room }) => {
     const player = players.find(p => p.name === name);
 
     if (selfTargeted.includes(actionType)) {
-      setDeclaredActions((prev) => [
-        ...prev,
+      const newDeclaredActions = [
+        ...declaredActions,
         {
-          index: prev.length,
+          index: declaredActions.length,
           actionType,
           target: name,
-        },
-      ]);
+        }
+      ];
+
+      setDeclaredActions(newDeclaredActions);
+
+      const hasDefend = newDeclaredActions.some(a => a.actionType === "defend");
+      const hasShield = newDeclaredActions.some(a => a.actionType === "energy-shield");
+      setDefenceWarning(hasDefend && hasShield);
 
       if (powerUps.includes(actionType)) {
         player.powerUps[actionType] -= 1;
-        console.log(player.powerUps);
       }
     } else {
+      // Defer declaration until target is selected via menu
       setPendingAttackType(actionType);
-      setAnchorEl(event.currentTarget); 
+      setAnchorEl(event.currentTarget);
     }
   };
 
@@ -274,24 +302,28 @@ export const Game = ({ socket, name, room }) => {
   };
 
   const executeAction = (index) => {
+    setDefenceError(false);
     if (confirmed) return;
+
+    const newSelection = selectedExecutions.includes(index)
+      ? selectedExecutions.filter((i) => i !== index)
+      : selectedExecutions.length < 2
+        ? [...selectedExecutions, index]
+        : selectedExecutions;
+
+    const selected = newSelection.map((i) => declaredActions[i]);
+
+    const hasDefend = selected.some(action => action.actionType === "defend");
+    const hasShield = selected.some(action => action.actionType === "energy-shield");
+
+    setDefenceError(hasDefend && hasShield);
     setActionsError(false);
-    setSelectedExecutions((prev) => {
-      if (prev.includes(index)) {
-        return prev.filter((i) => i !== index);
-      } else {
-        if (prev.length === 2) {
-          setActionsError(true);
-          return prev;
-        }
-        return [...prev, index];
-      }
-    });
+    setSelectedExecutions(newSelection);
   };
 
   const confirmExecution = () => {
+    if (defenceError) return;
     const actionsToExecute = selectedExecutions.map((i) => declaredActions[i]);
-    console.log(actionsToExecute);
     socket.emit("execute-actions", room, name, actionsToExecute);
     setConfirmed(true);
   };
@@ -345,7 +377,14 @@ export const Game = ({ socket, name, room }) => {
         ) : (
           stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
         )}
-
+        {defenceWarning && <p style={{ color: "yellow", marginBottom: "10px" }}>
+          You have declared both Defend and Energy Shield. Are you sure?
+          <br/>
+          You can only execute one of the these.
+        </p>}
+        {defenceError && <p style={{ color: "red", marginBottom: "10px" }}>
+          You cannot use Defend and Energy Shield in the same turn!
+        </p>}
         <button className="menu-button" onClick={leaveGame}>
           Leave Game
         </button>

@@ -23,11 +23,11 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
     if (!socket) return;
   
     const handleRoomExists = () => {
-      socket.emit("join-room", room, name); // ✅ Do NOT navigate yet
+      socket.emit("join-room", room, name);
     };
   
     const handleJoinSuccess = (roomJoined) => {
-      navigate(`/lobby/${roomJoined}`, { state: { creating: false } }); // ✅ Navigate here
+      navigate(`/lobby/${roomJoined}`, { state: { creating: false } });
     };
   
     const handleRoomNotFound = () => {
@@ -47,14 +47,14 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
     };
   
     socket.on("room-exists", handleRoomExists);
-    socket.on("join-success", handleJoinSuccess); // ✅ New listener
+    socket.on("join-success", handleJoinSuccess);
     socket.on("room-not-found", handleRoomNotFound);
     socket.on("started-error", handleStartedError);
     socket.on("duplicate-name-error", handleDuplicateNameError);
   
     return () => {
       socket.off("room-exists", handleRoomExists);
-      socket.off("join-success", handleJoinSuccess); // ✅ Cleanup
+      socket.off("join-success", handleJoinSuccess);
       socket.off("room-not-found", handleRoomNotFound);
       socket.off("started-error", handleStartedError);
       socket.off("duplicate-name-error", handleDuplicateNameError);

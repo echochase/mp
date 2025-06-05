@@ -48,7 +48,7 @@
 }
 
 .hp-segment {
-  width: 30px;
+  width: 17px;
   height: 5px;
   border-radius: 2px;
   background-color: gray;
@@ -93,6 +93,14 @@
 
 .animation-heal {
   background-image: url("../src/assets/heal.png");
+}
+
+.animation-attack {
+  background-image: url("../src/assets/attack.png");
+}
+
+.animation-special {
+  background-image: url("../src/assets/special.png");
 }
 
 @keyframes animatePulse {

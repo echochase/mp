@@ -48,7 +48,7 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
             )}
             <div>{name}</div>
             <div className="healthbar">
-              {[0, 1, 2].map(i => (
+              {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} className={`hp-segment ${i < hp ? 'filled' : 'empty'}`} />
               ))}
             </div>
