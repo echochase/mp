@@ -205,11 +205,19 @@ function processTurn(roomId, currentActions) {
       if (!result.success) return;
     }
     
-    const damage = action.action === "attack" ? 1 : (action.action === "special" ? 2 : null);
+    let damage;
+    
+    if (action.action === "attack") {
+      damage = 1;
+      io.to(roomId).emit("attack-occurred", action.playerName);
+    } else if (action.action === "special") {
+      damage = 2;
+      io.to(roomId).emit("special-occurred", action.playerName);
+    } else damage = null;
+
     const isCruelty = action.action === "cruelty";
 
     if (wasBlockedByProwess) {
-      console.log("checkpoint 1")
       action.result = "reflected";
       // Reflect the same damage
       const reflectedTarget = attacker;
@@ -217,13 +225,11 @@ function processTurn(roomId, currentActions) {
         reflectedTarget.hp = 0;
         eliminatedPlayers.add(reflectedTarget.name);
         io.to(roomId).emit("player-eliminated", reflectedTarget.name);
-        console.log("checkpoint 2")
       } else {
         reflectedTarget.hp = Math.max(0, reflectedTarget.hp - damage);
         if (reflectedTarget.hp === 0) {
           eliminatedPlayers.add(reflectedTarget.name);
           io.to(roomId).emit("player-eliminated", reflectedTarget.name);
-          console.log("checkpoint 3")
         }
       }
       return;
@@ -293,7 +299,7 @@ io.on('connection', (socket) => {
       players: [{
         name: playerName,
         socketId: socket.id,
-        hp: 3,
+        hp: 5,
         commands: [],
         isEliminated: false,
         powerUps: {
@@ -325,7 +331,7 @@ io.on('connection', (socket) => {
         roomData.players.push({
           name: playerName,
           socketId: socket.id,
-          hp: 3,
+          hp: 5,
           commands: [],
           isEliminated: false,
           powerUps: {
