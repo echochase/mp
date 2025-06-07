@@ -4,6 +4,29 @@ import { useNavigate } from "react-router-dom";
 
 export const EnterDetails = ({ socket, name, setName, room, setRoom, creating }) => {
   const navigate = useNavigate();
+  const isDark = document.body.classList.contains("dark");
+
+  const muiStyles = {
+    input: {
+      color: isDark ? "white" : "#242424"
+    },
+    "& .MuiInputBase-input::placeholder": {
+      color: "lightgray",
+      opacity: 1,
+      fontSize: "17px",
+    },
+    '& .MuiInput-underline:before': {
+      borderBottomColor: isDark ? "white" : "#646cff",
+    },
+    "& .MuiInput-underline:hover:before": {
+      borderBottomColor: isDark ? "white" : "#646cff",
+    },
+    '& .MuiInput-underline:after': {
+      borderBottomColor: isDark ? "white" : "#646cff",
+    },
+    width: "370px",
+    padding: "5px",
+  };
 
   const connectSocket = (e) => {
     e.preventDefault();
@@ -95,24 +118,4 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       </form>
     </div>
   );
-};
-
-const muiStyles = {
-  input: { color: "white" },
-  "& .MuiInputBase-input::placeholder": {
-    color: "lightgray",
-    opacity: 1,
-    fontSize: "17px",
-  },
-  "& .MuiInput-underline:before": {
-    borderBottomColor: "lightgray",
-  },
-  "& .MuiInput-underline:hover:before": {
-    borderBottomColor: "white",
-  },
-  "& .MuiInput-underline:after": {
-    borderBottomColor: "gray",
-  },
-  width: "370px",
-  padding: "5px",
 };

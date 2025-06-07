@@ -134,8 +134,7 @@ export const ActionButtons = ({ you, selectAction }) => {
 export const ChooseDeclarations = ({ confirmed, declaredActions, declareAction, deleteAction, name }) => {
   return (
     <div
-      className="declared-actions"
-      style={{ border: confirmed ? "2px solid yellow" : "2px solid white" }}
+      className={`declared-actions ${confirmed ? "confirmed" : "unconfirmed"}`}
     >
       <h3>Declared Actions:</h3>
       <div className="horizontal-box">
@@ -155,6 +154,17 @@ export const ChooseDeclarations = ({ confirmed, declaredActions, declareAction, 
           Confirm
         </button>
       )}
+      {confirmed && <>
+        <p>You will declare the following actions:</p>
+        {declaredActions.map((act, idx) => (
+          <div
+            key={idx}
+            onClick={() => deleteAction(idx)}
+          >
+            {act.actionType} {act.target !== name && `→ ${act.target}`}
+          </div>
+        ))}
+      </>}
       <br />
     </div>
   );

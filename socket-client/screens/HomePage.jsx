@@ -19,8 +19,10 @@ export const HomePage = () => {
         <div className="center">
           <button className="menu-button" onClick={() => navigate("/create")}>Create Room</button>
           <button className="menu-button" onClick={() => navigate("/join")}>Join Room</button>
+          <button className="menu-button" onClick={() => setStep(1)}>Back to Home</button>
         </div>
       )}
+      <div className="version-number">Version 0.0.1</div>
     </div>
   );
 };

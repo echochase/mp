@@ -36,3 +36,56 @@
   box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
   border-radius: 8px;
 }
+
+.settings-title {
+  position: absolute;
+  top: 30px;
+  width: 200px;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  position: relative;
+  justify-content: center;
+  gap: 10px;
+  width: 70vw;
+  height: 80vh;
+  border-radius: 30px;
+  border: 3px solid white;
+  margin: auto;
+}
+
+.back-button {
+  position: absolute;
+  bottom: 30px;
+  width: 200px;
+  background-color: rgb(193, 37, 37);
+}
+
+.back-button {
+  color: black;
+  background-color: rgb(193, 37, 37);
+}
+
+.settings-panel {
+  border: 3px solid black;
+}
+
+/* Dark Mode overrides */
+body.dark .back-button {
+  color: white;
+  background-color: rgb(193, 37, 37); /* optional: tweak for contrast */
+}
+
+body.dark .settings-panel {
+  border: 3px solid white;
+}
+
+.version-number {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+}
