@@ -11,7 +11,7 @@ import {
   TargetMenu,
   WinningModal,
 } from "../components/GameComponents";
-import { useMediaQuery } from "@mui/material";
+import { Modal, useMediaQuery } from "@mui/material";
 import ListIcon from "@mui/icons-material/List";
 
 export const Game = ({ socket, name, room }) => {
@@ -33,6 +33,8 @@ export const Game = ({ socket, name, room }) => {
   const [openLog, setOpenLog] = useState(false);
   const [defenceWarning, setDefenceWarning] = useState(false);
   const [defenceError, setDefenceError] = useState(false);
+  const [bluffWarning, setBluffWarning] = useState(false);
+  const [fewActionsWarning, setFewActionsWarning] = useState(false);
   
   const isMobile = useMediaQuery('(max-width:600px)');
 
@@ -206,6 +208,24 @@ export const Game = ({ socket, name, room }) => {
     };
   }, [socket, room, name, navigate]);
 
+  const getRemainingPowerUps = (player, declaredActions) => {
+    const usage = {};
+
+    declaredActions.forEach(a => {
+      if (powerUps.includes(a.actionType)) {
+        usage[a.actionType] = (usage[a.actionType] || 0) + 1;
+      }
+    });
+
+    const remaining = {};
+    powerUps.forEach(type => {
+      const owned = player.powerUps?.[type] || 0;
+      remaining[type] = owned - (usage[type] || 0);
+    });
+
+    return remaining;
+  };
+
   const declareAction = () => {
     if (declaredActions.length > 3) return;
     setActionsError(false);
@@ -216,26 +236,35 @@ export const Game = ({ socket, name, room }) => {
 
   const closeTargetMenu = (targetName) => {
     setAnchorEl(null);
-  
-    if (!targetName) return; // User clicked outside or dismissed menu
-  
+
+    if (!targetName) return; // User dismissed the menu
+
     const player = players.find(p => p.name === name);
-  
-    setDeclaredActions((prev) => [
-      ...prev,
-      {
-        index: prev.length,
-        actionType: pendingAttackType,
-        target: targetName,
-      },
-    ]);
-  
+    const remaining = getRemainingPowerUps(player, declaredActions);
+    const isBluff = powerUps.includes(pendingAttackType) && remaining[pendingAttackType] <= 0;
+
+    const newAction = {
+      index: declaredActions.length,
+      actionType: pendingAttackType,
+      target: targetName,
+      bluff: isBluff,
+    };
+    
+    const updatedDeclared = [...declaredActions, newAction];
+    setDeclaredActions(updatedDeclared);
+
+    const hasBluff = updatedDeclared.some(a =>
+      powerUps.includes(a.actionType) &&
+      player.powerUps?.[a.actionType] === 0
+    );
+    setBluffWarning(hasBluff);
+
     if (powerUps.includes(pendingAttackType)) {
       player.powerUps[pendingAttackType] -= 1;
     }
-  
+
     setPendingAttackType(null);
-  };  
+  };
 
   const deleteAction = (index) => {
     if (confirmed) return;
@@ -247,20 +276,27 @@ export const Game = ({ socket, name, room }) => {
 
     const player = players.find(p => p.name === name);
     const actionType = declaredActions[index].actionType;
+
     if (powerUps.includes(actionType)) {
-      player.powerUps[actionType]++;
+      player.powerUps[actionType] += 1;
     }
 
+    // Recalculate warnings
     const hasDefend = updatedDeclared.some(a => a.actionType === "defend");
     const hasShield = updatedDeclared.some(a => a.actionType === "energy-shield");
     setDefenceWarning(hasDefend && hasShield);
     setDefenceError(hasDefend && hasShield);
+
+    const hasBluff = updatedDeclared.some(a =>
+      powerUps.includes(a.actionType) &&
+      player.powerUps?.[a.actionType] === 0
+    );
+    setBluffWarning(hasBluff);
   };
 
-
   const selectAction = (event, actionType) => {
-    setDefenceWarning(false); // clear old warning
-    setActionsError(false);   // clear old error
+    setDefenceWarning(false);
+    setActionsError(false);
 
     if (declaredActions.length === 3) {
       setActionsError(true);
@@ -271,26 +307,38 @@ export const Game = ({ socket, name, room }) => {
     const player = players.find(p => p.name === name);
 
     if (selfTargeted.includes(actionType)) {
+      const remaining = getRemainingPowerUps(player, declaredActions);
+      const isBluff = powerUps.includes(actionType) && remaining[actionType] <= 0;
       const newDeclaredActions = [
         ...declaredActions,
         {
           index: declaredActions.length,
           actionType,
           target: name,
+          bluff: isBluff,
         }
       ];
 
       setDeclaredActions(newDeclaredActions);
 
+      // Defence warnings
       const hasDefend = newDeclaredActions.some(a => a.actionType === "defend");
       const hasShield = newDeclaredActions.some(a => a.actionType === "energy-shield");
       setDefenceWarning(hasDefend && hasShield);
 
+      // Check for bluffing (power-up declared that user doesn't own)
+      const hasBluff = newDeclaredActions.some(a =>
+        powerUps.includes(a.actionType) &&
+        player.powerUps?.[a.actionType] === 0
+      );
+      setBluffWarning(hasBluff);
+
+      // Consume power-up
       if (powerUps.includes(actionType)) {
         player.powerUps[actionType] -= 1;
       }
     } else {
-      // Defer declaration until target is selected via menu
+      // Targeted action — open menu and check bluff immediately
       setPendingAttackType(actionType);
       setAnchorEl(event.currentTarget);
     }
@@ -324,8 +372,19 @@ export const Game = ({ socket, name, room }) => {
   const confirmExecution = () => {
     if (defenceError) return;
     const actionsToExecute = selectedExecutions.map((i) => declaredActions[i]);
+    if (actionsToExecute.length < 2) {
+      setFewActionsWarning(true);
+      return;
+    }
     socket.emit("execute-actions", room, name, actionsToExecute);
     setConfirmed(true);
+  };
+
+  const confirmAnyway = () => {
+    const actionsToExecute = selectedExecutions.map((i) => declaredActions[i]);
+    socket.emit("execute-actions", room, name, actionsToExecute);
+    setConfirmed(true);
+    setFewActionsWarning(false);
   };
 
   return (
@@ -382,6 +441,11 @@ export const Game = ({ socket, name, room }) => {
           <br/>
           You can only execute one of the these.
         </p>}
+        {bluffWarning && <p className="warning">
+          One or more actions you plan to declare are power-ups you do not have.
+          <br />
+          It will be a bluff. You will not be able to execute this action.
+        </p>}
         {defenceError && <p style={{ color: "red", marginBottom: "10px" }}>
           You cannot use Defend and Energy Shield in the same turn!
         </p>}
@@ -392,6 +456,17 @@ export const Game = ({ socket, name, room }) => {
         <TargetMenu {...{ anchorEl, open, closeTargetMenu, players, name }} />
         <WinningModal {...{ end, setEnd, winner }} />
         <LogModal {...{ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner }} />
+        <Modal open={fewActionsWarning} onClose={() => setFewActionsWarning(false)}>
+          <div className="modal center">
+            <h3>Execute Fewer Than 2 Actions?</h3>
+            <div>You’ve selected {selectedExecutions.length} action{selectedExecutions.length === 1 ? "" : "s"}.</div>
+            <div>Are you sure you want to proceed?</div>
+            <div className="horizontal-box" style={{ marginTop: "20px" }}>
+              <button className="menu-button" onClick={() => setFewActionsWarning(false)}>Cancel</button>
+              <button className="menu-button" onClick={confirmAnyway}>Confirm</button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );

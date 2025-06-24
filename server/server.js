@@ -72,7 +72,7 @@ function emitNextTurn(roomId) {
       room.chosenActions = {};
       io.to(roomId).emit("stage-update", "declaration");
   
-      if (room.turnCount % 2 === 1 && room.turnCount > 1) {
+      if (room.turnCount > 1) {
         room.players.forEach(p => {
           if (p.hp <= 0) return;
           const power = rollPowerUp();
@@ -391,7 +391,7 @@ io.on('connection', (socket) => {
   socket.on("execute-actions", (roomId, playerName, selections) => {
     const room = rooms[roomId];
     if (!room || room.turnStage !== "execution") return;
-    if (!Array.isArray(selections) || selections.length !== 2) return;
+    if (!Array.isArray(selections) || selections.length > 2) return;
   
     const declared = room.declaredActions[playerName];
     if (!declared || declared.length !== 3) return;
@@ -409,7 +409,7 @@ io.on('connection', (socket) => {
     room.chosenActions[playerName] = chosen;
   
     const allChosen = room.players.every(
-      p => Array.isArray(room.chosenActions[p.name]) && room.chosenActions[p.name].length === 2
+      p => Array.isArray(room.chosenActions[p.name]) && room.chosenActions[p.name].length <= 2
     );
   
     if (allChosen) {

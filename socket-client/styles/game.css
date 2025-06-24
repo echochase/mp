@@ -25,6 +25,14 @@ body:not(.dark) .corner-info {
   z-index: 50;
 }
 
+.powerup-buttons {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  z-index: 50;
+}
+
 .game-info {
   display: flex;
   gap: 5px;
@@ -98,6 +106,10 @@ body:not(.dark) .declared-actions.confirmed {
   border-radius: 50%;
   font-weight: bold;
   z-index: 1;
+}
+
+button.bluff {
+  background-color: darkred !important;
 }
 
 .power-up-wrapper {

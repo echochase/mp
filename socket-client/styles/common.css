@@ -89,3 +89,12 @@ body.dark .settings-panel {
   bottom: 20px;
   right: 20px;
 }
+
+.warning {
+  margin-bottom: 10px;
+}
+
+.body.dark .warning {
+  color: yellow;
+  margin-bottom: 10px;
+}
