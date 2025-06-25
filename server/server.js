@@ -25,6 +25,8 @@ const io = new Server(server, {
   },
 });
 
+console.log("Allowed origins:", allowedOrigins);
+
 server.listen(3000, () => {
   console.log('Server listening on port 3000');
 });
