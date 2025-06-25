@@ -20,15 +20,26 @@ export const WinningModal = ({ end, setEnd, winner }) => {
         </div>
       </div>
     </Modal>
-  )
-}
+  );
+};
 
-export const LogModal = ({ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner }) => {
+export const LogModal = ({
+  openLog,
+  setOpenLog,
+  room,
+  name,
+  turnLogs,
+  turnCount,
+  stage,
+  winner,
+}) => {
   return (
     <Modal open={openLog} onClose={() => setOpenLog(false)}>
       <div className="modal center">
         <h3>Game Room: {room}</h3>
-        <strong>Turn: {turnCount}, Stage: {stage}</strong>
+        <strong>
+          Turn: {turnCount}, Stage: {stage}
+        </strong>
         <strong>You: {name}</strong>
         <div className="mobile-log">
           {turnLogs.map((log, index) => (
@@ -42,10 +53,16 @@ export const LogModal = ({ openLog, setOpenLog, room, name, turnLogs, turnCount,
         )}
       </div>
     </Modal>
-  )
-}
+  );
+};
 
-export const TargetMenu = ({ anchorEl, open, closeTargetMenu, players, name }) => {
+export const TargetMenu = ({
+  anchorEl,
+  open,
+  closeTargetMenu,
+  players,
+  name,
+}) => {
   return (
     <Menu
       anchorEl={anchorEl}
@@ -81,7 +98,7 @@ export const TargetMenu = ({ anchorEl, open, closeTargetMenu, players, name }) =
         ))}
     </Menu>
   );
-}
+};
 
 export const ActionButtons = ({ you, selectAction }) => {
   const numSpecial = you?.powerUps.special;
@@ -92,51 +109,100 @@ export const ActionButtons = ({ you, selectAction }) => {
   return (
     <>
       <div className="action-buttons">
-        <button className="menu-button" onClick={(e) => selectAction(e, "attack")}>
-          Attack
-        </button>
-        <button className="menu-button" onClick={(e) => selectAction(e, "defend")}>
-          Defend
-        </button>
-        <button className="menu-button" onClick={(e) => selectAction(e, "energy-shield")}>
-          Energy Shield
-        </button>
+        <div className="tooltip-wrapper">
+          <button className="menu-button" onClick={(e) => selectAction(e, "attack")}>
+            Attack
+          </button>
+          <div className="tooltip">
+            A physical attack. Deals 1 damage. Blockable by defend.
+          </div>
+        </div>
+
+        <div className="tooltip-wrapper">
+          <button className="menu-button" onClick={(e) => selectAction(e, "defend")}>
+            Defend
+          </button>
+          <div className="tooltip">
+            Blocks a physical attack. Useless against energy-based power-ups.
+          </div>
+        </div>
+
+        <div className="tooltip-wrapper">
+          <button className="menu-button" onClick={(e) => selectAction(e, "energy-shield")}>
+            Energy Shield
+          </button>
+          <div className="tooltip">
+            Blocks any damaging power-ups such as Special Attack or Cruelty.
+          </div>
+        </div>
       </div>
+
+      <hr style={{ width: "100%" }} />
+
       <div className="powerup-buttons">
-        <div className="power-up-wrapper">
-          <button className={numSpecial >= 0 ? "menu-button" : "menu-button bluff"} onClick={(e) => selectAction(e, "special")}>
+        <div className="power-up-wrapper tooltip-wrapper">
+          <button
+            className={numSpecial >= 0 ? "menu-button" : "menu-button bluff"}
+            onClick={(e) => selectAction(e, "special")}
+          >
             Special Attack
           </button>
-          {numSpecial >= 0 && 
-          <div className="power-up-badge">{numSpecial}</div>}
+          {numSpecial >= 0 && <div className="power-up-badge">{numSpecial}</div>}
+          <div className="tooltip">
+            An energy-based attack that deals 2 damage to its target. Blockable by Energy Shield. May be reflected by Prowess.
+          </div>
         </div>
-        <div className="power-up-wrapper">
-          <button className={numCruelty >= 0 ? "menu-button" : "menu-button bluff"} onClick={(e) => selectAction(e, "cruelty")}>
+
+        <div className="power-up-wrapper tooltip-wrapper">
+          <button
+            className={numCruelty >= 0 ? "menu-button" : "menu-button bluff"}
+            onClick={(e) => selectAction(e, "cruelty")}
+          >
             Cruelty
           </button>
-          {numCruelty >= 0 && 
-          <div className="power-up-badge">{numCruelty}</div>}
+          {numCruelty >= 0 && <div className="power-up-badge">{numCruelty}</div>}
+          <div className="tooltip">
+            Instantly reduces target’s HP to 0. Blockable by Energy Shield only.
+          </div>
         </div>
-        <div className="power-up-wrapper">
-          <button className={numProwess >= 0 ? "menu-button" : "menu-button bluff"} onClick={(e) => selectAction(e, "prowess")}>
+
+        <div className="power-up-wrapper tooltip-wrapper">
+          <button
+            className={numProwess >= 0 ? "menu-button" : "menu-button bluff"}
+            onClick={(e) => selectAction(e, "prowess")}
+          >
             Prowess
           </button>
-          {numProwess >= 0 && 
-          <div className="power-up-badge">{numProwess}</div>}
+          {numProwess >= 0 && <div className="power-up-badge">{numProwess}</div>}
+          <div className="tooltip">
+            If the target attacks the user, reflects all energy-based attacks back to the attacker.
+          </div>
         </div>
-        <div className="power-up-wrapper">
-          <button className={numHeal >= 0 ? "menu-button" : "menu-button bluff"} onClick={(e) => selectAction(e, "heal")}>
+
+        <div className="power-up-wrapper tooltip-wrapper">
+          <button
+            className={numHeal >= 0 ? "menu-button" : "menu-button bluff"}
+            onClick={(e) => selectAction(e, "heal")}
+          >
             Heal
           </button>
-          {numHeal >= 0 && 
-          <div className="power-up-badge">{numHeal}</div>
-}        </div>
+          {numHeal >= 0 && <div className="power-up-badge">{numHeal}</div>}
+          <div className="tooltip">
+            Restore 2 HP. Cannot exceed max HP.
+          </div>
+        </div>
       </div>
     </>
   );
-}
+};
 
-export const ChooseDeclarations = ({ confirmed, declaredActions, declareAction, deleteAction, name }) => {
+export const ChooseDeclarations = ({
+  confirmed,
+  declaredActions,
+  declareAction,
+  deleteAction,
+  name,
+}) => {
   return (
     <div
       className={`declared-actions ${confirmed ? "confirmed" : "unconfirmed"}`}
@@ -159,24 +225,32 @@ export const ChooseDeclarations = ({ confirmed, declaredActions, declareAction, 
           Confirm
         </button>
       )}
-      {confirmed && <>
-        <p>You will declare the following actions:</p>
-        {declaredActions.map((act, idx) => (
-          <div
-            key={idx}
-            className={act.bluff ? "bluff" : ""}
-            onClick={() => deleteAction(idx)}
-          >
-            {act.actionType} {act.target !== name && `→ ${act.target}`}
-          </div>
-        ))}
-      </>}
+      {confirmed && (
+        <>
+          <p>You will declare the following actions:</p>
+          {declaredActions.map((act, idx) => (
+            <div
+              key={idx}
+              className={act.bluff ? "bluff" : ""}
+              onClick={() => deleteAction(idx)}
+            >
+              {act.actionType} {act.target !== name && `→ ${act.target}`}
+            </div>
+          ))}
+        </>
+      )}
       <br />
     </div>
   );
-}
+};
 
-export const ChooseExecutions = ({ confirmed, declaredActions, selectedExecutions, confirmExecution, executeAction }) => {
+export const ChooseExecutions = ({
+  confirmed,
+  declaredActions,
+  selectedExecutions,
+  confirmExecution,
+  executeAction,
+}) => {
   return (
     <div
       className="choose-execution"
@@ -192,7 +266,9 @@ export const ChooseExecutions = ({ confirmed, declaredActions, selectedExecution
               const isSelected = selectedExecutions.includes(idx);
               return (
                 <button
-                  className={`declared-action ${isSelected ? "selected" : ""} ${act.bluff ? "bluff" : ""}`}
+                  className={`declared-action ${isSelected ? "selected" : ""} ${
+                    act.bluff ? "bluff" : ""
+                  }`}
                   key={idx}
                   onClick={() => executeAction(idx)}
                   disabled={act.bluff}
@@ -235,4 +311,4 @@ export const ChooseExecutions = ({ confirmed, declaredActions, selectedExecution
       )}
     </div>
   );
-}
+};

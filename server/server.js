@@ -72,15 +72,13 @@ function emitNextTurn(roomId) {
       room.chosenActions = {};
       io.to(roomId).emit("stage-update", "declaration");
   
-      if (room.turnCount > 1) {
-        room.players.forEach(p => {
-          if (p.hp <= 0) return;
-          const power = rollPowerUp();
-          if (!p.powerUps[power]) p.powerUps[power] = 0;
-          p.powerUps[power]++;
-          io.to(p.socketId).emit("power-up-received", p.name, power);
-        });
-      }
+      room.players.forEach(p => {
+        if (p.hp <= 0) return;
+        const power = rollPowerUp();
+        if (!p.powerUps[power]) p.powerUps[power] = 0;
+        p.powerUps[power]++;
+        io.to(p.socketId).emit("power-up-received", p.name, power);
+      });
   
       io.to(roomId).emit("next-turn", {
         turnCount: room.turnCount,
@@ -213,6 +211,9 @@ function processTurn(roomId, currentActions) {
     } else if (action.action === "special") {
       damage = 2;
       io.to(roomId).emit("special-occurred", action.playerName);
+    } else if (action.action === "cruelty") {
+      io.to(roomId).emit("cruelty-occurred", action.playerName)
+      damage = null;
     } else damage = null;
 
     const isCruelty = action.action === "cruelty";
@@ -447,6 +448,12 @@ io.on('connection', (socket) => {
       console.log(`Room ${room} started by ${name}.`);
       io.to(room).emit('next-turn', {
         turnCount: roomData.turnCount,
+      });
+      roomData.players.forEach(p => {
+        const power = rollPowerUp();
+        if (!p.powerUps[power]) p.powerUps[power] = 0;
+        p.powerUps[power]++;
+        io.to(p.socketId).emit("power-up-received", p.name, power);
       });
     }
   });

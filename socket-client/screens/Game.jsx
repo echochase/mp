@@ -181,6 +181,10 @@ export const Game = ({ socket, name, room }) => {
     socket.on("prowess-occurred", user => {
       queueAnimation(user, "prowess");
     });
+
+    socket.on("cruelty-occurred", user => {
+      queueAnimation(user, "cruelty");
+    });
     
     socket.on("heal-occurred", user => {
       queueAnimation(user, "heal");
@@ -241,7 +245,7 @@ export const Game = ({ socket, name, room }) => {
 
     const player = players.find(p => p.name === name);
     const remaining = getRemainingPowerUps(player, declaredActions);
-    const isBluff = powerUps.includes(pendingAttackType) && remaining[pendingAttackType] <= 0;
+    const isBluff = powerUps.includes(pendingAttackType) && remaining[pendingAttackType] < 0;
 
     const newAction = {
       index: declaredActions.length,
@@ -308,7 +312,7 @@ export const Game = ({ socket, name, room }) => {
 
     if (selfTargeted.includes(actionType)) {
       const remaining = getRemainingPowerUps(player, declaredActions);
-      const isBluff = powerUps.includes(actionType) && remaining[actionType] <= 0;
+      const isBluff = powerUps.includes(actionType) && remaining[actionType] < 0;
       const newDeclaredActions = [
         ...declaredActions,
         {
@@ -449,7 +453,7 @@ export const Game = ({ socket, name, room }) => {
         {defenceError && <p style={{ color: "red", marginBottom: "10px" }}>
           You cannot use Defend and Energy Shield in the same turn!
         </p>}
-        <button className="menu-button" onClick={leaveGame}>
+        <button className="menu-button red" onClick={leaveGame}>
           Leave Game
         </button>
 

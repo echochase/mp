@@ -25,6 +25,10 @@
   color: white;
 }
 
+.menu-button.red {
+  background-color: rgb(190, 35, 35);
+}
+
 .modal {
   position: absolute;
   top: 50%;
