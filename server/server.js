@@ -6,11 +6,23 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Attach io to the existing HTTP server, no port here
+const allowedOrigins = [
+  process.env.CLIENT_ORIGIN,             // Your frontend (e.g., https://your-site.vercel.app)
+  "https://github.com",                  // GitHub (for Actions requests)
+];
+
 const io = new Server(server, {
   cors: {
-    origin: [process.env.CLIENT_ORIGIN],
-  }
+    origin: (origin, callback) => {
+      // Allow no origin (e.g., server-to-server) or approved origins
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  },
 });
 
 server.listen(3000, () => {
@@ -18,39 +30,6 @@ server.listen(3000, () => {
 });
 
 let rooms = {};
-
-/**
- * ROOM STRUCTURE
- * rooms = {
- *   [roomId]: {
- *     id: string,
- *     players: [
- *       {
- *         name: string,
- *         socketId: string,
- *         hp: number,
- *         commands: string[]
- *       }
- *     ],
- *     leader: string,
- *     started: boolean,
- *     playerTurn: number,
- *     turnCount: number,
- *     actions: Array<Array<{
- *       playerName: string,
- *       action: string,
- *       targetName: string,
- *       result?: string
- *     }>>
- *   }
- * }
- */
-
-/**
- * DECLARED ACTIONS
- * playerName: string,
- * actions: string[]
- */
 
 function emitNextTurn(roomId) {
   const room = rooms[roomId];
