@@ -6,6 +6,11 @@
   justify-content: center;
 }
 
+.about-description {
+  text-align: left;
+  gap: 2px;
+}
+
 .horizontal-box {
   display: flex;
   flex-direction: row;
