@@ -20,7 +20,7 @@ export const About = () => {
       <p>There are two types of damaging moves in this game: <u>Physical</u> moves and <u>Energy</u> moves.</p>
       The default Attack action is a physical move. Power-ups are considered energy moves. 
       <h3>Attack</h3>
-      <button style={{ color: "black", border: "2px solid black", backgroundColor: "rgb(193, 37, 37)", position: "fixed" }}" onClick={() => navigate("/")}>Back to Home</button>
+      <button style={{ color: "black", border: "2px solid black", backgroundColor: "rgb(193, 37, 37)", position: "fixed" }} onClick={() => navigate("/")}>Back to Home</button>
     </div>
   )
 }
