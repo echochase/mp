@@ -424,7 +424,6 @@ export const Game = ({ socket, name, room }) => {
           stage={stage}
           blockAnimations={activeAnimations}
         />
-
         {stage === "declaration" ? (
           <ChooseDeclarations {...{ confirmed, declaredActions, declareAction, deleteAction, name }} />
         ) : (

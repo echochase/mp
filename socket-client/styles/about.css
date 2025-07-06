@@ -1,0 +1,68 @@
+.center {
+  max-width: 800px;
+  margin: auto;
+  padding: 2rem;
+  color: #f0f0f0;
+}
+
+.title {
+  font-size: 2.5rem;
+  color: #ffa500;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  color: #ccc;
+  margin-bottom: 1.5rem;
+}
+
+.stages-list {
+  list-style-type: disc;
+}
+
+.return-to-menu {
+  margin-top: 2rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #c73f3f;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.return-to-menu:hover {
+  background-color: #de4430;
+}
+
+.about-description {
+  text-align: left;       /* Default left alignment for all content */
+  max-width: 800px;
+  margin: auto;
+  padding: 2rem;
+  color: #f0f0f0;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  background-color: #333333;
+}
+
+.about-description h1,
+.about-description .subtitle {
+  text-align: center;
+}
+
+.about-description p {
+  margin: 0.5rem 0;
+}
+
+.about-description .return-to-menu {
+  justify-content: center;
+}
+
+.about-description h2,
+.about-description h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}

@@ -15,7 +15,7 @@ export default function App() {
   const [name, setName] = useState(localStorage.getItem("name") || "");
   const [room, setRoom] = useState(localStorage.getItem("room") || "");
 
-  const storedTheme = localStorage.getItem("theme");
+  let storedTheme = localStorage.getItem("theme");
   if (!storedTheme) {
     localStorage.setItem("theme", "dark");
     storedTheme = "dark";
