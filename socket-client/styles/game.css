@@ -75,16 +75,21 @@ body:not(.dark) .declared-actions.confirmed {
   border: 2px solid green;
 }
 
+.declared-action-choose {
+  border: 2px solid gray;
+  opacity: 0.5;
+  transform: scale(0.99);
+}
+
 .declared-action {
   border: 2px solid white;
 }
 
-
 .declared-action.selected {
-  border: 2px solid gray;
-  opacity: 0.9;
-  transform: scale(0.95);
+  border: 2px solid white;
   transition: all 0.2s ease;
+  opacity: 100%;
+  transform: scale(1.05);
 }
 
 .choose-execution {

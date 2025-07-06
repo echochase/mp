@@ -266,7 +266,7 @@ export const ChooseExecutions = ({
               const isSelected = selectedExecutions.includes(idx);
               return (
                 <button
-                  className={`declared-action ${isSelected ? "selected" : ""} ${
+                  className={`declared-action ${isSelected ? "selected" : "declared-action-choose"} ${
                     act.bluff ? "bluff" : ""
                   }`}
                   key={idx}

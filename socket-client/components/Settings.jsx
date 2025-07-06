@@ -62,7 +62,7 @@ export const Settings = () => {
                   color: darkMode ? "#fff" : "#000",
                 },
                 "& .MuiSwitch-switchBase + .MuiSwitch-track": {
-                  backgroundColor: darkMode ? "#888" : "#000",
+                  backgroundColor: "#888",
                 },
                 "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
                   backgroundColor: darkMode ? "#fff" : "#2196f3",
@@ -84,7 +84,7 @@ export const Settings = () => {
                   color: "#fff",
                 },
                 "& .MuiSwitch-switchBase + .MuiSwitch-track": {
-                  backgroundColor: darkMode ? "#444" : "#000",
+                  backgroundColor: "#888",
                 },
                 "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
                   backgroundColor: darkMode ? "#66bb6a" : "#2e7d32",
