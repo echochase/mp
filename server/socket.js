@@ -1,4 +1,3 @@
-/* socket.js */
 const rooms = require('./rooms');
 const { rollPowerUp } = require('./powers');
 const { emitNextTurn, processTurn } = require('./game');
@@ -7,7 +6,9 @@ module.exports = function(io) {
   io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    socket.on('create-room', (room, playerName) => {
+    socket.on('create-room', (unusedRoomCode, playerName) => {
+      const room = generateRoomCode();
+
       rooms[room] = {
         id: room,
         players: [createPlayer(playerName, socket.id)],
@@ -16,7 +17,12 @@ module.exports = function(io) {
         playerTurn: 0,
         turnCount: 0,
       };
+
       socket.join(room);
+
+      socket.emit('room-created', room);
+      socket.emit('set-leader', playerName);
+
       io.to(room).emit('new-player', rooms[room].players.map(slimPlayer));
       console.log(`Room ${room} created by ${playerName}`);
     });
@@ -219,4 +225,12 @@ function createPlayer(name, socketId) {
 
 function slimPlayer(p) {
   return { name: p.name, hp: p.hp };
+}
+
+function generateRoomCode() {
+  let code;
+  do {
+    code = Math.floor(100000 + Math.random() * 900000).toString(); // e.g., "584291"
+  } while (rooms[code]);
+  return code;
 }

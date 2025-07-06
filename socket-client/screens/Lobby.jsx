@@ -8,7 +8,7 @@ export const Lobby = ({ socket, name, room, setRoom }) => {
   const [players, setPlayers] = useState([]);
 
   const creating = location.state?.creating;
-
+  console.log(creating)
   const leaveLobby = () => {
     socket.emit("leave-room", roomCode, name);
     navigate("/");
@@ -32,10 +32,10 @@ export const Lobby = ({ socket, name, room, setRoom }) => {
       navigate(`/play/${roomCode}`);
     };
   
-    socket.emit("get-players", roomCode); // 👈 Ask server for current player list
+    socket.emit("get-players", roomCode);
   
-    socket.on("players-update", updatePlayers); // 👈 Receive it
-    socket.on("new-player", updatePlayers);     // 👈 Also update when others join/leave
+    socket.on("players-update", updatePlayers);
+    socket.on("new-player", updatePlayers);
     socket.on("start-confirm", handleStart);
   
     return () => {

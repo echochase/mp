@@ -36,7 +36,6 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       const newRoom = socket.id;
       setRoom(newRoom);
       socket.emit("create-room", newRoom, name);
-      navigate(`/lobby/${newRoom}`, { state: { creating: true } });
     } else {
       socket.emit("check-room", room);
     }
@@ -64,6 +63,11 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       setName("");
     };
   
+    const handleRoomCreated = (roomCode) => {
+      setRoom(roomCode);
+      navigate(`/lobby/${roomCode}`, { state: { creating: true } });
+    }
+
     const handleStartedError = () => {
       alert("Sorry, that game has started!");
       setRoom("");
@@ -71,6 +75,7 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
   
     socket.on("room-exists", handleRoomExists);
     socket.on("join-success", handleJoinSuccess);
+    socket.on("room-created", handleRoomCreated);
     socket.on("room-not-found", handleRoomNotFound);
     socket.on("started-error", handleStartedError);
     socket.on("duplicate-name-error", handleDuplicateNameError);
