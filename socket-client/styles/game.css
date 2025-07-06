@@ -130,6 +130,8 @@ button.bluff {
   background-color: #111111;
   padding: 20px;
   overflow: auto;
+  border-radius: 10px;
+  min-width: 450px;
 }
 
 .tooltip-wrapper {

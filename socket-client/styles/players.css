@@ -4,7 +4,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 100px 0 50px 0;
+  margin: -100px 0 50px 0;
 }
 
 .player-tile {
@@ -110,5 +110,16 @@
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(2.5);
+  }
+}
+
+@media only screen and (max-width: 600px) {
+  .players-circle {
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: -70px 0 0px 0;
   }
 }
