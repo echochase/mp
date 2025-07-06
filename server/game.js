@@ -69,8 +69,8 @@ function processTurn(io, roomId, currentActions) {
     if (action.action === "prowess" && action.targetName) {
       const result = tryUsePowerUp(player, "prowess", action.targetName);
       action.result = result.result;
-      io.to(roomId).emit("prowess-occurred", action.playerName);
       if (result.success) prowessMap[action.playerName] = action.targetName;
+      io.to(roomId).emit("prowess-occurred", action.playerName);
     }
   });
 
@@ -103,15 +103,15 @@ function processTurn(io, roomId, currentActions) {
       return;
     }
 
-    const blockedByProwess = prowessMap[target.name] === attacker.name;
-    const blockedByShield = energyShields.has(target.name) && action.action !== 'attack';
-    const blockedByDefend = defends.has(target.name) && action.action === 'attack';
-
-    if (["special", "cruelty"].includes(action.action)) {
+    if (["special", "cruelty", "prowess", "heal"].includes(action.action)) {
       const result = tryUsePowerUp(attacker, action.action);
       action.result = result.result;
       if (!result.success) return;
     }
+
+    const blockedByProwess = prowessMap[target.name] === attacker.name;
+    const blockedByShield = energyShields.has(target.name) && action.action !== 'attack';
+    const blockedByDefend = defends.has(target.name) && action.action === 'attack';
 
     const isCruelty = action.action === "cruelty";
     const damage = action.action === "special" ? 2 : 1;

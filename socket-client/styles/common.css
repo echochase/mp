@@ -46,27 +46,6 @@
   border-radius: 8px;
 }
 
-.settings-title {
-  position: absolute;
-  top: 30px;
-  width: 200px;
-}
-
-.settings-panel {
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
-  align-items: center;
-  position: relative;
-  justify-content: center;
-  gap: 10px;
-  width: 70vw;
-  height: 80vh;
-  border-radius: 30px;
-  border: 3px solid white;
-  margin: auto;
-}
-
 .back-button {
   position: absolute;
   bottom: 30px;
@@ -77,10 +56,6 @@
 .back-button {
   color: black;
   background-color: rgb(193, 37, 37);
-}
-
-.settings-panel {
-  border: 3px solid black;
 }
 
 /* Dark Mode overrides */

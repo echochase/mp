@@ -8,7 +8,6 @@ export const Lobby = ({ socket, name, room, setRoom }) => {
   const [players, setPlayers] = useState([]);
 
   const creating = location.state?.creating;
-  console.log(creating)
   const leaveLobby = () => {
     socket.emit("leave-room", roomCode, name);
     navigate("/");

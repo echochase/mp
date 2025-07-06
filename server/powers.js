@@ -10,8 +10,9 @@ function tryUsePowerUp(player, actionType, targetName = null) {
   if (!player || player.hp <= 0) return { success: false, result: "invalid player" };
 
   const powerUps = player.powerUps || {};
+  console.log(player.name, powerUps, actionType, powerUps[actionType])
   if (["prowess", "heal", "special", "cruelty"].includes(actionType)) {
-    if ((powerUps[actionType] || 0) > 0) {
+    if ((powerUps[actionType]) > 0) {
       powerUps[actionType] -= 1;
       const result = actionType === "heal" ? "healed" :
                      actionType === "prowess" ? "ready" : `${actionType} used`;

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Modal, useMediaQuery } from "@mui/material";
+import ListIcon from "@mui/icons-material/List";
 import { Players } from "../components/Players";
-import "../styles/game.css";
-import "../styles/common.css";
 import {
   ActionButtons,
   ChooseDeclarations,
@@ -11,8 +11,8 @@ import {
   TargetMenu,
   WinningModal,
 } from "../components/GameComponents";
-import { Modal, useMediaQuery } from "@mui/material";
-import ListIcon from "@mui/icons-material/List";
+import "../styles/game.css";
+import "../styles/common.css";
 
 export const Game = ({ socket, name, room }) => {
   const [turnCount, setTurnCount] = useState(0);
@@ -35,52 +35,50 @@ export const Game = ({ socket, name, room }) => {
   const [defenceError, setDefenceError] = useState(false);
   const [bluffWarning, setBluffWarning] = useState(false);
   const [fewActionsWarning, setFewActionsWarning] = useState(false);
-  
+
   const isMobile = useMediaQuery('(max-width:600px)');
-
-  const queueAnimation = (playerName, animationType) => {
-    setPlayerAnimationQueues(prev => {
-      const existing = prev[playerName] || [];
-      return {
-        ...prev,
-        [playerName]: [...existing, animationType]
-      };
-    });
-  };  
-  
-  // Define power-up names
-  const powerUps = ["special", "cruelty", "prowess", "heal"];
-
   const open = Boolean(anchorEl);
   const navigate = useNavigate();
   const you = players.find((p) => p.name === name);
   const isEliminated = you?.hp === 0;
-  
+
+  const powerUps = ["special", "cruelty", "prowess", "heal"];
+
+  const queueAnimation = (playerName, animationType) => {
+    setPlayerAnimationQueues((prev) => {
+      const existing = prev[playerName] || [];
+      return {
+        ...prev,
+        [playerName]: [...existing, animationType],
+      };
+    });
+  };
+
   useEffect(() => {
     Object.entries(playerAnimationQueues).forEach(([player, queue]) => {
       if (queue.length === 0 || activeAnimations[player]) return;
-  
+
       const [nextAnimation, ...rest] = queue;
-  
-      setActiveAnimations(prev => ({
+
+      setActiveAnimations((prev) => ({
         ...prev,
-        [player]: nextAnimation
+        [player]: nextAnimation,
       }));
-  
-      setPlayerAnimationQueues(prev => ({
+
+      setPlayerAnimationQueues((prev) => ({
         ...prev,
-        [player]: rest
+        [player]: rest,
       }));
-  
+
       setTimeout(() => {
-        setActiveAnimations(prev => {
+        setActiveAnimations((prev) => {
           const updated = { ...prev };
           delete updated[player];
           return updated;
         });
-      }, 1000); // match with your animation duration
+      }, 1000);
     });
-  }, [playerAnimationQueues, activeAnimations]);  
+  }, [playerAnimationQueues, activeAnimations]);
 
   useEffect(() => {
     if (!socket || !room || !name) {
@@ -111,9 +109,9 @@ export const Game = ({ socket, name, room }) => {
 
     const handlePlayerEliminated = (name) => {
       console.log(`${name} was eliminated`);
-    }
+    };
 
-    const handleGameOver = ({type, winner}) => {
+    const handleGameOver = ({ type, winner }) => {
       if (type === "win") {
         setTurnLogs((prev) => [...prev, `🏆 ${winner} wins the game!`]);
         setWinner(winner);
@@ -122,7 +120,7 @@ export const Game = ({ socket, name, room }) => {
         setTurnLogs((prev) => [...prev, `🤝 It's a draw! No players remain.`]);
         setWinner(null);
       }
-    }
+    };
 
     const handlePowerUp = (name, power) => {
       setPlayers((prevPlayers) =>
@@ -140,12 +138,10 @@ export const Game = ({ socket, name, room }) => {
     };
 
     const updatePlayers = (playersList) => {
-      setPlayers(
-        playersList.map((p) => ({
-          ...p,
-          powerUps: p.powerUps ?? {},
-        }))
-      );
+      setPlayers(playersList.map((p) => ({
+        ...p,
+        powerUps: p.powerUps ?? {},
+      })));
     };
 
     const handleTurnLog = (message) => {
@@ -161,72 +157,50 @@ export const Game = ({ socket, name, room }) => {
     socket.on("all-declared", handleDeclarations);
     socket.on("player-eliminated", handlePlayerEliminated);
     socket.on("game-over", handleGameOver);
-    
-    socket.on("attack-occurred", user => {
-      queueAnimation(user, "attack");
-    });
 
-    socket.on("special-occurred", user => {
-      queueAnimation(user, "special");
-    });
-
-    socket.on("block-occurred", blocker => {
-      queueAnimation(blocker, "defend");
-    });
-    
-    socket.on("shield-occurred", blocker => {
-      queueAnimation(blocker, "shield");
-    });
-    
-    socket.on("prowess-occurred", user => {
-      queueAnimation(user, "prowess");
-    });
-
-    socket.on("cruelty-occurred", user => {
-      queueAnimation(user, "cruelty");
-    });
-    
-    socket.on("heal-occurred", user => {
-      queueAnimation(user, "heal");
-    });    
+    socket.on("attack-occurred", (user) => queueAnimation(user, "attack"));
+    socket.on("special-occurred", (user) => queueAnimation(user, "special"));
+    socket.on("block-occurred", (blocker) => queueAnimation(blocker, "defend"));
+    socket.on("shield-occurred", (blocker) => queueAnimation(blocker, "shield"));
+    socket.on("prowess-occurred", (user) => queueAnimation(user, "prowess"));
+    socket.on("cruelty-occurred", (user) => queueAnimation(user, "cruelty"));
+    socket.on("heal-occurred", (user) => queueAnimation(user, "heal"));
 
     socket.emit("get-current-turn", room, name);
     socket.emit("get-players", room);
 
     return () => {
+      socket.off("power-up-received", handlePowerUp);
       socket.off("next-turn", handleNextTurn);
       socket.off("rejoin-game", handleRejoin);
       socket.off("players-update", updatePlayers);
       socket.off("turn-log", handleTurnLog);
       socket.off("stage-update", handleStageChange);
       socket.off("all-declared", handleDeclarations);
-      socket.off("power-up-received", handlePowerUp);
       socket.off("player-eliminated", handlePlayerEliminated);
       socket.off("game-over", handleGameOver);
+      socket.off("attack-occurred");
+      socket.off("special-occurred");
       socket.off("block-occurred");
       socket.off("shield-occurred");
       socket.off("prowess-occurred");
+      socket.off("cruelty-occurred");
       socket.off("heal-occurred");
-      socket.off("attack-occurred");
-      socket.off("special-occurred");
     };
   }, [socket, room, name, navigate]);
 
-  const getRemainingPowerUps = (player, declaredActions) => {
+  const getRemainingPowerUps = (player, declared) => {
     const usage = {};
-
-    declaredActions.forEach(a => {
+    declared.forEach((a) => {
       if (powerUps.includes(a.actionType)) {
         usage[a.actionType] = (usage[a.actionType] || 0) + 1;
       }
     });
-
     const remaining = {};
-    powerUps.forEach(type => {
+    powerUps.forEach((type) => {
       const owned = player.powerUps?.[type] || 0;
       remaining[type] = owned - (usage[type] || 0);
     });
-
     return remaining;
   };
 
@@ -240,12 +214,11 @@ export const Game = ({ socket, name, room }) => {
 
   const closeTargetMenu = (targetName) => {
     setAnchorEl(null);
+    if (!targetName) return;
 
-    if (!targetName) return; // User dismissed the menu
-
-    const player = players.find(p => p.name === name);
+    const player = players.find((p) => p.name === name);
     const remaining = getRemainingPowerUps(player, declaredActions);
-    const isBluff = powerUps.includes(pendingAttackType) && remaining[pendingAttackType] < 0;
+    const isBluff = powerUps.includes(pendingAttackType) && remaining[pendingAttackType] <= 0;
 
     const newAction = {
       index: declaredActions.length,
@@ -253,13 +226,12 @@ export const Game = ({ socket, name, room }) => {
       target: targetName,
       bluff: isBluff,
     };
-    
+
     const updatedDeclared = [...declaredActions, newAction];
     setDeclaredActions(updatedDeclared);
 
-    const hasBluff = updatedDeclared.some(a =>
-      powerUps.includes(a.actionType) &&
-      player.powerUps?.[a.actionType] === 0
+    const hasBluff = updatedDeclared.some(
+      (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] <= 0
     );
     setBluffWarning(hasBluff);
 
@@ -278,22 +250,20 @@ export const Game = ({ socket, name, room }) => {
     const updatedDeclared = declaredActions.filter((_, i) => i !== index);
     setDeclaredActions(updatedDeclared);
 
-    const player = players.find(p => p.name === name);
+    const player = players.find((p) => p.name === name);
     const actionType = declaredActions[index].actionType;
 
     if (powerUps.includes(actionType)) {
       player.powerUps[actionType] += 1;
     }
 
-    // Recalculate warnings
-    const hasDefend = updatedDeclared.some(a => a.actionType === "defend");
-    const hasShield = updatedDeclared.some(a => a.actionType === "energy-shield");
+    const hasDefend = updatedDeclared.some((a) => a.actionType === "defend");
+    const hasShield = updatedDeclared.some((a) => a.actionType === "energy-shield");
     setDefenceWarning(hasDefend && hasShield);
     setDefenceError(hasDefend && hasShield);
 
-    const hasBluff = updatedDeclared.some(a =>
-      powerUps.includes(a.actionType) &&
-      player.powerUps?.[a.actionType] === 0
+    const hasBluff = updatedDeclared.some(
+      (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] === 0
     );
     setBluffWarning(hasBluff);
   };
@@ -308,41 +278,32 @@ export const Game = ({ socket, name, room }) => {
     }
 
     const selfTargeted = ["defend", "heal", "energy-shield"];
-    const player = players.find(p => p.name === name);
+    const player = players.find((p) => p.name === name);
 
     if (selfTargeted.includes(actionType)) {
       const remaining = getRemainingPowerUps(player, declaredActions);
-      const isBluff = powerUps.includes(actionType) && remaining[actionType] < 0;
+      const isBluff = powerUps.includes(actionType) && remaining[actionType] <= 0;
+
       const newDeclaredActions = [
         ...declaredActions,
-        {
-          index: declaredActions.length,
-          actionType,
-          target: name,
-          bluff: isBluff,
-        }
+        { index: declaredActions.length, actionType, target: name, bluff: isBluff },
       ];
 
       setDeclaredActions(newDeclaredActions);
 
-      // Defence warnings
-      const hasDefend = newDeclaredActions.some(a => a.actionType === "defend");
-      const hasShield = newDeclaredActions.some(a => a.actionType === "energy-shield");
+      const hasDefend = newDeclaredActions.some((a) => a.actionType === "defend");
+      const hasShield = newDeclaredActions.some((a) => a.actionType === "energy-shield");
       setDefenceWarning(hasDefend && hasShield);
 
-      // Check for bluffing (power-up declared that user doesn't own)
-      const hasBluff = newDeclaredActions.some(a =>
-        powerUps.includes(a.actionType) &&
-        player.powerUps?.[a.actionType] === 0
+      const hasBluff = newDeclaredActions.some(
+        (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] === 0
       );
       setBluffWarning(hasBluff);
 
-      // Consume power-up
       if (powerUps.includes(actionType)) {
         player.powerUps[actionType] -= 1;
       }
     } else {
-      // Targeted action — open menu and check bluff immediately
       setPendingAttackType(actionType);
       setAnchorEl(event.currentTarget);
     }
@@ -365,8 +326,8 @@ export const Game = ({ socket, name, room }) => {
 
     const selected = newSelection.map((i) => declaredActions[i]);
 
-    const hasDefend = selected.some(action => action.actionType === "defend");
-    const hasShield = selected.some(action => action.actionType === "energy-shield");
+    const hasDefend = selected.some((a) => a.actionType === "defend");
+    const hasShield = selected.some((a) => a.actionType === "energy-shield");
 
     setDefenceError(hasDefend && hasShield);
     setActionsError(false);
@@ -375,6 +336,7 @@ export const Game = ({ socket, name, room }) => {
 
   const confirmExecution = () => {
     if (defenceError) return;
+
     const actionsToExecute = selectedExecutions.map((i) => declaredActions[i]);
     if (actionsToExecute.length < 2) {
       setFewActionsWarning(true);
@@ -393,29 +355,40 @@ export const Game = ({ socket, name, room }) => {
 
   return (
     <div className="center">
-      {isMobile ?
-      <ListIcon
-        sx={{ position: "absolute", left: "30px", top: "30px", cursor: "pointer", color: "white", width: "50px", height: "50px" }}
-        onClick={() => setOpenLog(true)}
-      /> : 
-      <div className="corner-info">
-        <p style={{ fontSize: "12.5px" }}>Game Room: {room}</p>
-        <div className="game-info">
-          <strong>Turn: {turnCount}</strong>
-          <strong>You: {name}</strong>
-          <strong>Stage: {stage}</strong>
-        </div>
-        <div style={{ fontSize: "14px", marginTop: "10px", color: "#ccc" }}>
-          {turnLogs.map((log, index) => (
-            <div key={index}>{log}</div>
-          ))}
-        </div>
-        {winner !== "" && (
-          <div className="center">
-            {winner ? <h3>Result: {winner} wins</h3> : <h3>Result: Draw</h3>}
+      {isMobile ? (
+        <ListIcon
+          sx={{
+            position: "absolute",
+            left: "30px",
+            top: "30px",
+            cursor: "pointer",
+            color: "white",
+            width: "50px",
+            height: "50px",
+          }}
+          onClick={() => setOpenLog(true)}
+        />
+      ) : (
+        <div className="corner-info">
+          <p style={{ fontSize: "12.5px" }}>Game Room: {room}</p>
+          <div className="game-info">
+            <strong>Turn: {turnCount}</strong>
+            <strong>You: {name}</strong>
+            <strong>Stage: {stage}</strong>
           </div>
-        )}
-      </div>}
+          <div style={{ fontSize: "14px", marginTop: "10px", color: "#ccc" }}>
+            {turnLogs.map((log, index) => (
+              <div key={index}>{log}</div>
+            ))}
+          </div>
+          {winner !== "" && (
+            <div className="center">
+              {winner ? <h3>Result: {winner} wins</h3> : <h3>Result: Draw</h3>}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className={`center ${!isMobile ? "gameplay" : ""}`}>
         <Players
           players={players}
@@ -424,34 +397,43 @@ export const Game = ({ socket, name, room }) => {
           stage={stage}
           blockAnimations={activeAnimations}
         />
+
         {stage === "declaration" ? (
           <ChooseDeclarations {...{ confirmed, declaredActions, declareAction, deleteAction, name }} />
         ) : (
           <ChooseExecutions {...{ confirmed, declaredActions, selectedExecutions, confirmExecution, executeAction }} />
         )}
-        {actionsError && (
-          <div style={{ color: "red" }}>Please declare exactly 3 actions!</div>
-        )}
+
+        {actionsError && <div style={{ color: "red" }}>Please declare exactly 3 actions!</div>}
+
         {isEliminated ? (
-          <p style={{ color: "red", marginBottom: "10px" }}>
-            You have been eliminated and cannot take actions.
-          </p>
+          <p style={{ color: "red", marginBottom: "10px" }}>You have been eliminated and cannot take actions.</p>
         ) : (
           stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
         )}
-        {defenceWarning && <p style={{ color: "yellow", marginBottom: "10px" }}>
-          You have declared both Defend and Energy Shield. Are you sure?
-          <br/>
-          You can only execute one of the these.
-        </p>}
-        {bluffWarning && <p className="warning">
-          One or more actions you plan to declare are power-ups you do not have.
-          <br />
-          It will be a bluff. You will not be able to execute this action.
-        </p>}
-        {defenceError && <p style={{ color: "red", marginBottom: "10px" }}>
-          You cannot use Defend and Energy Shield in the same turn!
-        </p>}
+
+        {defenceWarning && (
+          <p style={{ color: "yellow", marginBottom: "10px" }}>
+            You have declared both Defend and Energy Shield. Are you sure?
+            <br />
+            You can only execute one of these.
+          </p>
+        )}
+
+        {bluffWarning && (
+          <p className="warning">
+            One or more actions you plan to declare are power-ups you do not have.
+            <br />
+            It will be a bluff. You will not be able to execute this action.
+          </p>
+        )}
+
+        {defenceError && (
+          <p style={{ color: "red", marginBottom: "10px" }}>
+            You cannot use Defend and Energy Shield in the same turn!
+          </p>
+        )}
+
         <button className="menu-button red" onClick={leaveGame}>
           Leave Game
         </button>
@@ -459,14 +441,21 @@ export const Game = ({ socket, name, room }) => {
         <TargetMenu {...{ anchorEl, open, closeTargetMenu, players, name }} />
         <WinningModal {...{ end, setEnd, winner }} />
         <LogModal {...{ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner }} />
+
         <Modal open={fewActionsWarning} onClose={() => setFewActionsWarning(false)}>
           <div className="modal center">
             <h3>Execute Fewer Than 2 Actions?</h3>
-            <div>You’ve selected {selectedExecutions.length} action{selectedExecutions.length === 1 ? "" : "s"}.</div>
+            <div>
+              You’ve selected {selectedExecutions.length} action{selectedExecutions.length === 1 ? "" : "s"}.
+            </div>
             <div>Are you sure you want to proceed?</div>
             <div className="horizontal-box" style={{ marginTop: "20px" }}>
-              <button className="menu-button" onClick={() => setFewActionsWarning(false)}>Cancel</button>
-              <button className="menu-button" onClick={confirmAnyway}>Confirm</button>
+              <button className="menu-button" onClick={() => setFewActionsWarning(false)}>
+                Cancel
+              </button>
+              <button className="menu-button" onClick={confirmAnyway}>
+                Confirm
+              </button>
             </div>
           </div>
         </Modal>
