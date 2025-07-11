@@ -376,7 +376,7 @@ export const Game = ({ socket, name, room }) => {
             <strong>You: {name}</strong>
             <strong>Stage: {stage}</strong>
           </div>
-          <div style={{ fontSize: "14px", marginTop: "10px", color: "#ccc" }}>
+          <div className="turn-log">
             {turnLogs.map((log, index) => (
               <div key={index}>{log}</div>
             ))}
@@ -446,7 +446,7 @@ export const Game = ({ socket, name, room }) => {
           <div className="modal center">
             <h3>Execute Fewer Than 2 Actions?</h3>
             <div>
-              You’ve selected {selectedExecutions.length} action{selectedExecutions.length === 1 ? "" : "s"}.
+              You've selected {selectedExecutions.length} action{selectedExecutions.length === 1 ? "" : "s"}.
             </div>
             <div>Are you sure you want to proceed?</div>
             <div className="horizontal-box" style={{ marginTop: "20px" }}>

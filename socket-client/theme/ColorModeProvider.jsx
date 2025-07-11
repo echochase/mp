@@ -70,6 +70,10 @@ export const ColorModeProvider = ({ children }) => {
     document.body.style.setProperty("--card-bg", isDark ? "#222222" : "#cccccc");
     document.body.style.setProperty("--settings-bg", isDark ? "#222222" : "#cccccc");
     document.body.style.setProperty("--setting-bg", isDark ? "#333333" : "#bbbbbb");
+    document.body.style.setProperty("--modal-bg", isDark ? "black" : "#eeeeee");
+    document.body.style.setProperty("--confirmed-border", isDark ? "yellow" : "green");
+    document.body.style.setProperty("--info-bg", isDark ? "#121212" : "#cccccc");
+    document.body.style.setProperty("--tile-bg", isDark ? "black" : "#ffffff")
   }, [mode]);
 
   return (

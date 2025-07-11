@@ -22,7 +22,7 @@ export const HomePage = () => {
           <button className="menu-button" onClick={() => setStep(1)}>Back to Home</button>
         </div>
       )}
-      <div className="version-number">Version 0.0.7</div>
+      <div className="version-number">Version 0.0.8</div>
     </div>
   );
 };

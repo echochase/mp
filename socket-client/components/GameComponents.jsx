@@ -110,7 +110,7 @@ export const ActionButtons = ({ you, selectAction }) => {
     <>
       <div className="action-buttons">
         <div className="tooltip-wrapper">
-          <button className="menu-button" onClick={(e) => selectAction(e, "attack")}>
+          <button className="action-button" onClick={(e) => selectAction(e, "attack")}>
             Attack
           </button>
           <div className="tooltip">
@@ -119,7 +119,7 @@ export const ActionButtons = ({ you, selectAction }) => {
         </div>
 
         <div className="tooltip-wrapper">
-          <button className="menu-button" onClick={(e) => selectAction(e, "defend")}>
+          <button className="action-button" onClick={(e) => selectAction(e, "defend")}>
             Defend
           </button>
           <div className="tooltip">
@@ -128,7 +128,7 @@ export const ActionButtons = ({ you, selectAction }) => {
         </div>
 
         <div className="tooltip-wrapper">
-          <button className="menu-button" onClick={(e) => selectAction(e, "energy-shield")}>
+          <button className="action-button" onClick={(e) => selectAction(e, "energy-shield")}>
             Energy Shield
           </button>
           <div className="tooltip">
@@ -142,7 +142,7 @@ export const ActionButtons = ({ you, selectAction }) => {
       <div className="powerup-buttons">
         <div className="power-up-wrapper tooltip-wrapper">
           <button
-            className={numSpecial >= 0 ? "menu-button" : "menu-button bluff"}
+            className={numSpecial >= 0 ? "action-button" : "action-button bluff"}
             onClick={(e) => selectAction(e, "special")}
           >
             Special Attack
@@ -155,7 +155,7 @@ export const ActionButtons = ({ you, selectAction }) => {
 
         <div className="power-up-wrapper tooltip-wrapper">
           <button
-            className={numCruelty >= 0 ? "menu-button" : "menu-button bluff"}
+            className={numCruelty >= 0 ? "action-button" : "action-button bluff"}
             onClick={(e) => selectAction(e, "cruelty")}
           >
             Cruelty
@@ -168,7 +168,7 @@ export const ActionButtons = ({ you, selectAction }) => {
 
         <div className="power-up-wrapper tooltip-wrapper">
           <button
-            className={numProwess >= 0 ? "menu-button" : "menu-button bluff"}
+            className={numProwess >= 0 ? "action-button" : "action-button bluff"}
             onClick={(e) => selectAction(e, "prowess")}
           >
             Prowess
@@ -181,7 +181,7 @@ export const ActionButtons = ({ you, selectAction }) => {
 
         <div className="power-up-wrapper tooltip-wrapper">
           <button
-            className={numHeal >= 0 ? "menu-button" : "menu-button bluff"}
+            className={numHeal >= 0 ? "action-button" : "action-button bluff"}
             onClick={(e) => selectAction(e, "heal")}
           >
             Heal
