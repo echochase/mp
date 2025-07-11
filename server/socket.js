@@ -6,7 +6,7 @@ module.exports = function(io) {
   io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    socket.on('create-room', (unusedRoomCode, playerName) => {
+    socket.on('create-room', (playerName) => {
       const room = generateRoomCode();
 
       rooms[room] = {
@@ -62,7 +62,9 @@ module.exports = function(io) {
 
       room.declaredActions[playerName] = actions;
 
-      const allDeclared = room.players.every(
+      const alivePlayers = room.players.filter(p => p.hp > 0);
+
+      const allDeclared = alivePlayers.every(
         p => room.declaredActions[p.name]?.length === 3
       );
 
@@ -94,7 +96,8 @@ module.exports = function(io) {
         targetName: sel.target,
       }));
 
-      const allChosen = room.players.every(
+      const alivePlayers = room.players.filter(p => p.hp > 0);
+      const allChosen = alivePlayers.every(
         p => Array.isArray(room.chosenActions[p.name]) && room.chosenActions[p.name].length <= 2
       );
 

@@ -33,16 +33,20 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
   const connectSocket = (e) => {
     e.preventDefault();
     if (!socket || !name.trim()) return;
-
-    setLoading(true);
-
+    console.log(name);
+    if (name.length > 10) {
+      alert("Please enter 10 characters or less!");
+      return;
+    }
     if (creating) {
       const newRoom = socket.id;
       setRoom(newRoom);
-      socket.emit("create-room", newRoom, name);
+      socket.emit("create-room", name);
     } else {
       socket.emit("check-room", room);
     }
+
+    setLoading(true);
   };
 
   useEffect(() => {
@@ -106,6 +110,8 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
           <CircularProgress />
           <p style={{ marginTop: "15px", color: isDark ? "white" : "#242424", fontSize: "16px" }}>
             Server is starting, please wait a while...
+            <br />
+            [Estimated time: 30 seconds]
           </p>
         </div>
       )}

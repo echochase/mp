@@ -10,7 +10,7 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
   const declarationsMap = Object.fromEntries(totalDeclarations);
 
   return (
-    <div className="players-circle" style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div className="players-circle" style={{ position: "relative", width: "100%", height: "100%", marginTop: `${-300 + playerCount * 100 - (playerCount - 3) * 75}px`, marginBottom: `${playerCount * 20}px` }}>
       {players.map((player, index) => {
         const { name, hp } = player;
         

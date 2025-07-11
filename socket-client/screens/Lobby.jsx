@@ -49,6 +49,9 @@ export const Lobby = ({ socket, name, room, setRoom }) => {
       alert("Not enough players!");
       return;
     }
+    if (players.length > 6) {
+      alert("Too many players!");
+    }
     socket.emit("start-game", roomCode, name);
   };
 
