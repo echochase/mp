@@ -162,7 +162,7 @@ export const ActionButtons = ({ you, selectAction }) => {
           </button>
           {numCruelty >= 0 && <div className="power-up-badge">{numCruelty}</div>}
           <div className="tooltip">
-            Instantly reduces target’s HP to 0. Blockable by Energy Shield only.
+            Instantly reduces target's HP to 0. Blockable by Energy Shield only.
           </div>
         </div>
 
@@ -175,7 +175,7 @@ export const ActionButtons = ({ you, selectAction }) => {
           </button>
           {numProwess >= 0 && <div className="power-up-badge">{numProwess}</div>}
           <div className="tooltip">
-            If the target attacks the user, reflects all energy-based attacks back to the attacker.
+            If the target attacks the user, reflects all attacks back to the attacker.
           </div>
         </div>
 
