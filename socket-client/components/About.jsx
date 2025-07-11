@@ -12,6 +12,9 @@ export const About = () => {
       <h2>Goal</h2>
       <p>To eliminate all other players and <b>become the last player standing</b>.</p>
 
+      <h2>Recommended Player Count</h2>
+      <p>Double Bluff is best played with 4-6 players, but can support a minimum of 2.</p>
+
       <h2>Gameplay</h2>
       <p>Each player starts with <b>5 hitpoints</b>.</p>
       <p>
@@ -22,7 +25,6 @@ export const About = () => {
         Each turn, players receive a random power-up from:{" "}
         <b>Special Attack</b>, <b>Cruelty</b>, <b>Prowess</b>, and <b>Heal</b>.
       </p>
-
       <p>
         Turns are split into two phases: the{" "}
         <b>Declaration Stage</b> and the <b>Execution Stage</b>.
@@ -47,6 +49,7 @@ export const About = () => {
         The default <b>Attack</b> action is a <u>Physical</u> move, while power-ups
         are classified as <u>Energy</u> moves.
       </p>
+      <p>While both can be declared simultaneously, <b>Defend</b> and <b>Energy Shield</b> cannot be executed in the same turn.</p>
 
       <h3>Attack</h3>
       <p>A physical offensive move that deals 1 hitpoint of damage from its target if left unblocked.</p>

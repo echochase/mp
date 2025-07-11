@@ -32,6 +32,8 @@ module.exports = function(io) {
       if (roomData) {
         if (roomData.started) {
           socket.emit("started-error");
+        } else if (roomData.players.length > 5) {
+          socket.emit("full-error");
         } else if (roomData.players.some(p => p.name === playerName)) {
           socket.emit("duplicate-name-error");
         } else {
@@ -44,6 +46,40 @@ module.exports = function(io) {
       } else {
         socket.emit("non-existent-error");
       }
+    });
+
+    socket.on("kick-player", (room, name, playerName) => {
+      const roomData = rooms[room];
+      if (roomData) {
+        if (name === roomData.leader) {
+          roomData.players = roomData.players.filter(p => p.name !== playerName);
+          io.to(room).emit("players-update", roomData.players.map(p => ({
+            name: p.name,
+            hp: p.hp,
+            powerUps: p.powerUps,
+            ready: p.ready,
+          })));
+        }
+      } else {
+        socket.emit("non-existent-error");
+      }
+    });
+
+    socket.on('player-ready', (room, name) => {
+      const roomData = rooms[room];
+      if (!roomData) return;
+
+      const player = roomData.players.find(p => p.name === name);
+      if (!player) return;
+
+      player.ready = true;
+
+      io.to(room).emit("players-update", roomData.players.map(p => ({
+        name: p.name,
+        hp: p.hp,
+        powerUps: p.powerUps,
+        ready: p.ready,
+      })));
     });
 
     socket.on('check-room', (room) => {
@@ -158,7 +194,12 @@ module.exports = function(io) {
     socket.on("get-players", (room) => {
       const roomData = rooms[room];
       if (roomData) {
-        socket.emit("players-update", roomData.players.map(p => ({ name: p.name, hp: p.hp, powerUps: p.powerUps })));
+        socket.emit("players-update", roomData.players.map(p => ({
+          name: p.name,
+          hp: p.hp,
+          powerUps: p.powerUps,
+          ready: p.ready,
+        })));
       }
     });
 
@@ -182,7 +223,12 @@ module.exports = function(io) {
         roomData.playerTurn = 0;
       }
 
-      io.to(room).emit("players-update", roomData.players.map(p => ({ name: p.name, hp: p.hp, powerUps: p.powerUps })));
+      io.to(room).emit("players-update", roomData.players.map(p => ({
+        name: p.name,
+        hp: p.hp,
+        powerUps: p.powerUps,
+        ready: p.ready,
+      })));
 
       if (roomData.started) {
         emitNextTurn(io, room);
@@ -222,12 +268,13 @@ function createPlayer(name, socketId) {
       heal: 0,
       prowess: 0,
       energyShield: 0,
-    }
+    },
+    ready: false,
   };
 }
 
 function slimPlayer(p) {
-  return { name: p.name, hp: p.hp };
+  return { name: p.name, hp: p.hp, ready: p.ready };
 }
 
 function generateRoomCode() {

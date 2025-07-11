@@ -1,36 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FormControlLabel,
   Switch,
 } from "@mui/material";
 import { Brightness4, Brightness7 } from "@mui/icons-material";
-import "../styles/settings.css"
+import { ColorModeContext } from "../theme/ColorModeProvider"; // adjust import path
+import "../styles/settings.css";
 
 export const Settings = () => {
   const navigate = useNavigate();
 
-  const [darkMode, setDarkMode] = useState(true);
+  const { mode, toggleColorMode } = useContext(ColorModeContext);
+  const [darkMode, setDarkMode] = useState(mode === "dark");
   const [enableAnimations, setEnableAnimations] = useState(false);
 
   useEffect(() => {
-    const storedTheme = localStorage.getItem("theme");
+    setDarkMode(mode === "dark");
+
     const storedAnimations = localStorage.getItem("enableAnimations");
-
-    const isDark = storedTheme === "dark";
-    setDarkMode(isDark);
-    document.body.classList.toggle("dark", isDark);
-
     if (storedAnimations !== null) {
       setEnableAnimations(JSON.parse(storedAnimations));
     }
-  }, []);
+  }, [mode]);
 
   const handleThemeToggle = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    localStorage.setItem("theme", newDarkMode ? "dark" : "light");
-    document.body.classList.toggle("dark", newDarkMode);
+    toggleColorMode();
   };
 
   const handleAnimationToggle = () => {

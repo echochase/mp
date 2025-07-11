@@ -5,27 +5,17 @@
   text-align: left;
   width: 200px;
   height: 80vh;
-  background-color: black;
+  background-color: var(--bg); /* black or light-gray */
+  color: var(--text);
   overflow: auto;
   padding: 15px 30px;
-  border: 2px solid white;
+  border: 2px solid var(--border);
   border-radius: 10px;
 }
 
-body:not(.dark) .corner-info {
-  color: white;
-}
-
-.action-buttons {
-  margin-top: 50px;
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 20px;
-  z-index: 50;
-}
-
+.action-buttons,
 .powerup-buttons {
+  margin-top: 50px;
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
@@ -42,14 +32,11 @@ body:not(.dark) .corner-info {
   position: fixed;
   top: 15px;
   left: 15px;
-  border: 2px solid white;
+  border: 2px solid var(--border);
   padding: 10px 30px;
-  background: #222222;
+  background-color: var(--bg);
+  color: var(--text);
   justify-content: center;
-}
-
-body:not(.dark) .game-info {
-  color: white;
 }
 
 .declared-actions {
@@ -60,19 +47,12 @@ body:not(.dark) .game-info {
   flex-direction: column;
   padding: 20px;
   border-radius: 20px;
-  border: 2px solid white;
+  color: var(--text);
+  border: 2px solid var(--border);
 }
 
 .declared-actions.confirmed {
-  border: 2px solid yellow;
-}
-
-body:not(.dark) .declared-actions {
-  border: 2px solid black;
-}
-
-body:not(.dark) .declared-actions.confirmed {
-  border: 2px solid green;
+  border: 2px solid var(--confirmed-border); /* e.g. yellow or green */
 }
 
 .declared-action-choose {
@@ -82,11 +62,11 @@ body:not(.dark) .declared-actions.confirmed {
 }
 
 .declared-action {
-  border: 2px solid white;
+  border: 2px solid var(--border);
 }
 
 .declared-action.selected {
-  border: 2px solid white;
+  border: 2px solid var(--border);
   transition: all 0.2s ease;
   opacity: 100%;
   transform: scale(1.05);
@@ -129,10 +109,10 @@ button.bluff {
 .mobile-log {
   font-size: 14px;
   margin-top: 10px;
-  color: #ccc;
+  color: var(--subtle-text);
   text-align: center;
   height: 255px;
-  background-color: #111111;
+  background-color: var(--surface-bg);
   padding: 20px;
   overflow: auto;
   border-radius: 10px;
@@ -146,8 +126,8 @@ button.bluff {
 
 .tooltip {
   visibility: hidden;
-  background-color: #333;
-  color: #fff;
+  background-color: var(--tooltip-bg);
+  color: var(--tooltip-text);
   text-align: left;
   border-radius: 6px;
   padding: 8px 10px;
@@ -155,7 +135,7 @@ button.bluff {
   z-index: 10;
   width: max-content;
   max-width: 250px;
-  bottom: 110%; /* adjust if needed */
+  bottom: 110%;
   left: 50%;
   transform: translateX(-50%);
   opacity: 0;
