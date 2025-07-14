@@ -55,6 +55,18 @@ export const HomePage = () => {
               >
                 About
               </Button>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate("/update-notes")}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: 'rgba(29, 133, 224, 0.08)',
+                  },
+                }}
+              >
+                Update Notes
+              </Button>
             </>
           ) : (
             <>
@@ -96,7 +108,7 @@ export const HomePage = () => {
         mt={5}
         sx={{ position: "absolute", bottom: 16 }}
       >
-        Version 0.0.9
+        Version 0.1.0
       </Typography>
     </Box>
   );

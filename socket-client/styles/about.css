@@ -2,7 +2,6 @@
   max-width: 800px;
   margin: auto;
   padding: 2rem;
-  color: #f0f0f0;
 }
 
 .title {
@@ -37,7 +36,7 @@
 }
 
 .about-description {
-  text-align: left;       /* Default left alignment for all content */
+  text-align: left;
   max-width: 800px;
   margin: auto;
   padding: 2rem;
@@ -55,6 +54,7 @@
 
 .about-description p {
   margin: 0.5rem 0;
+  color: #f0f0f0;
 }
 
 .about-description .return-to-menu {
@@ -64,5 +64,6 @@
 .about-description h2,
 .about-description h3 {
   margin-top: 1.5rem;
+  color: #f0f0f0;
   margin-bottom: 0.5rem;
 }

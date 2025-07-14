@@ -33,18 +33,12 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
         const x = radius * radiusFactor * Math.cos(angleRad);
         const y = radius * radiusFactor * Math.sin(angleRad);
 
-        let className = "player-tile";
-        if (name === you) {
-          className += " you";
-        } else {
-          className += " other";
-        }
-        if (stage === "execution") {
-          className += " dec"
-        }
-        if (hp <= 0) {
-          className += " eliminated";
-        }
+        const className = [
+          "player-tile",
+          name === you ? "you" : "other",
+          stage === "execution" && "dec",
+          hp <= 0 && "eliminated"
+        ].filter(Boolean).join(" ");
 
         return (
           <div

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Modal, useMediaQuery } from "@mui/material";
+import { Fab, Modal, Typography, useMediaQuery } from "@mui/material";
 import ListIcon from "@mui/icons-material/List";
 import { Players } from "../components/Players";
 import {
@@ -380,18 +380,10 @@ export const Game = ({ socket, name, room }) => {
   return (
     <div className="center">
       {isMobile ? (
-        <ListIcon
-          sx={{
-            position: "absolute",
-            left: "30px",
-            top: "30px",
-            cursor: "pointer",
-            color: "white",
-            width: "50px",
-            height: "50px",
-          }}
-          onClick={() => setOpenLog(true)}
-        />
+        <Fab size="medium" color="primary" sx={{ position: 'fixed', top: 20, left: 20 }} onClick={() => setOpenLog(true)}>
+          <ListIcon />
+        </Fab>
+
       ) : (
         <div className="corner-info">
           <p style={{ fontSize: "12.5px" }}>Game Room: {room}</p>
@@ -428,7 +420,7 @@ export const Game = ({ socket, name, room }) => {
           <ChooseExecutions {...{ confirmed, declaredActions, selectedExecutions, confirmExecution, executeAction }} />
         )}
 
-        {actionsError && <div style={{ color: "red" }}>Please declare exactly 3 actions!</div>}
+        {actionsError && <Typography color="error" sx={{ mb: 1 }}>Please declare exactly 3 actions!</Typography>}
 
         {isEliminated ? (
           <p style={{ color: "red", marginBottom: "10px" }}>You have been eliminated and cannot take actions.</p>
@@ -453,9 +445,9 @@ export const Game = ({ socket, name, room }) => {
         )}
 
         {defenceError && (
-          <p style={{ color: "red", marginBottom: "10px" }}>
+          <Typography color="error" sx={{ mb: 1 }}>
             You cannot use Defend and Energy Shield in the same turn!
-          </p>
+          </Typography>
         )}
 
         <button className="menu-button red" onClick={leaveGame}>

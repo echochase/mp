@@ -9,6 +9,7 @@ import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
 import { Settings } from "../components/Settings";
 import { About } from "../components/About";
+import { UpdateNotes } from "../components/UpdateNotes";
 
 export default function App() {
   const [socket, setSocket] = useState(null);
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/play/:roomCode" element={<Game {...sharedProps} />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/about" element={<About />} />
+        <Route path="/update-notes" element={<UpdateNotes />} />
       </Routes>
     </BrowserRouter>
   );
