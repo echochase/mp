@@ -74,6 +74,7 @@ export const ColorModeProvider = ({ children }) => {
     document.body.style.setProperty("--confirmed-border", isDark ? "yellow" : "green");
     document.body.style.setProperty("--info-bg", isDark ? "#121212" : "#cccccc");
     document.body.style.setProperty("--tile-bg", isDark ? "black" : "#ffffff")
+    document.body.style.setProperty("--warning", isDark ? "yellow" : "darkorange")
   }, [mode]);
 
   return (

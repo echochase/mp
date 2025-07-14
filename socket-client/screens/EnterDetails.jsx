@@ -1,43 +1,29 @@
-import { TextField, CircularProgress } from "@mui/material";
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Stack,
+  TextField,
+  Typography,
+  useTheme,
+} from "@mui/material";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTheme } from "@mui/material/styles";
 
 export const EnterDetails = ({ socket, name, setName, room, setRoom, creating }) => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";  // Get mode from MUI theme
+  const isDark = theme.palette.mode === "dark";
   const [loading, setLoading] = useState(false);
-
-  const muiStyles = {
-    input: {
-      color: isDark ? "white" : "#242424",
-    },
-    "& .MuiInputBase-input::placeholder": {
-      color: "lightgray",
-      opacity: 1,
-      fontSize: "17px",
-    },
-    '& .MuiInput-underline:before': {
-      borderBottomColor: isDark ? "white" : "#646cff",
-    },
-    "& .MuiInput-underline:hover:before": {
-      borderBottomColor: isDark ? "white" : "#646cff",
-    },
-    '& .MuiInput-underline:after': {
-      borderBottomColor: isDark ? "white" : "#646cff",
-    },
-    width: "370px",
-    padding: "5px",
-  };
 
   const connectSocket = (e) => {
     e.preventDefault();
     if (!socket || !name.trim()) return;
     if (name.length > 10) {
-      alert("Please enter 10 characters or less!");
+      alert("Keep your name to 10 characters or fewer 🌱");
       return;
     }
+
     if (creating) {
       const newRoom = socket.id;
       setRoom(newRoom);
@@ -52,26 +38,9 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
   useEffect(() => {
     if (!socket) return;
 
-    const handleRoomExists = () => {
-      socket.emit("join-room", room, name);
-    };
-
-    const handleJoinSuccess = (roomJoined) => {
+    const handleRoomExists = () => socket.emit("join-room", room, name);
+    const handleJoinSuccess = (roomJoined) =>
       navigate(`/lobby/${roomJoined}`, { state: { creating: false } });
-    };
-
-    const handleRoomNotFound = () => {
-      alert("Sorry, this room doesn't exist.");
-      setRoom("");
-      setLoading(false);
-    };
-
-    const handleDuplicateNameError = () => {
-      alert("This name is already taken in this room!");
-      navigate("/join");
-      setName("");
-      setLoading(false);
-    };
 
     const handleRoomCreated = (roomCode) => {
       setRoom(roomCode);
@@ -79,14 +48,27 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       setLoading(false);
     };
 
+    const handleRoomNotFound = () => {
+      alert("Hmm... couldn't find that room 🕵️‍♂️");
+      setRoom("");
+      setLoading(false);
+    };
+
+    const handleDuplicateNameError = () => {
+      alert("Looks like someone already grabbed that name.");
+      navigate("/join");
+      setName("");
+      setLoading(false);
+    };
+
     const handleStartedError = () => {
-      alert("Sorry, that game has started!");
+      alert("Oops! That game's already started.");
       setRoom("");
       setLoading(false);
     };
 
     const handleFullError = () => {
-      alert("Sorry, that room is full!");
+      alert("That room is full! Try another one.");
       setRoom("");
       setLoading(false);
     };
@@ -102,6 +84,7 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
     return () => {
       socket.off("room-exists", handleRoomExists);
       socket.off("join-success", handleJoinSuccess);
+      socket.off("room-created", handleRoomCreated);
       socket.off("room-not-found", handleRoomNotFound);
       socket.off("started-error", handleStartedError);
       socket.off("duplicate-name-error", handleDuplicateNameError);
@@ -110,61 +93,105 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
   }, [socket, room, name, navigate, setRoom, setName]);
 
   return (
-    <div className="center">
-      <h1 style={{ color: isDark ? "white" : "#242424" }}>
+    <Box
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      minHeight="100vh"
+      px={2}
+    >
+      <Typography variant="h4" fontWeight={600} mb={3}>
         {creating ? "Create a Room" : "Join a Room"}
-      </h1>
+      </Typography>
+
       {loading && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
+        <Stack alignItems="center" spacing={2} mb={3}>
           <CircularProgress />
-          <p
-            style={{
-              marginTop: "15px",
-              color: isDark ? "white" : "#242424",
-              fontSize: "16px",
-            }}
-          >
-            Server is starting, please wait a while...
+          <Typography variant="body2" textAlign="center" color="text.secondary">
+            Just warming things up...
             <br />
-            [Estimated time: 30 seconds]
-          </p>
-        </div>
+            Might take ~30 seconds ☕
+          </Typography>
+        </Stack>
       )}
-      <form onSubmit={connectSocket} className="center">
-        {!creating && (
+
+      <Box
+        component="form"
+        onSubmit={connectSocket}
+        maxWidth="360px"
+        width="100%"
+        borderRadius={2}
+        p={3}
+        boxShadow={3}
+        bgcolor={isDark ? "grey.900" : "grey.100"}
+      >
+        <Stack spacing={3}>
+          {!creating && (
+            <TextField
+              variant="standard"
+              placeholder="Room Code"
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              fullWidth
+              inputProps={{ maxLength: 6 }}
+              InputProps={{
+                sx: {
+                  color: isDark ? "white" : "#242424",
+                },
+              }}
+            />
+          )}
+
           <TextField
-            placeholder="Enter Room Code"
             variant="standard"
-            value={room}
-            onChange={(e) => setRoom(e.target.value)}
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             fullWidth
-            sx={muiStyles}
+            inputProps={{ maxLength: 10 }}
+            InputProps={{
+              sx: {
+                color: isDark ? "white" : "#242424",
+              },
+            }}
           />
-        )}
-        <TextField
-          placeholder="Enter Username"
-          variant="standard"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          fullWidth
-          sx={muiStyles}
-        />
-        <div className="horizontal-box" style={{ marginTop: "30px" }}>
-          <button type="button" className="menu-button" onClick={() => navigate("/")}>
-            Back
-          </button>
-          <button type="submit" className="menu-button">
-            {creating ? "Create Room" : "Join Room"}
-          </button>
-        </div>
-      </form>
-    </div>
+
+          <Stack direction="row" spacing={2} justifyContent="center" pt={2}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => navigate("/")}
+              sx={{
+                borderRadius: "20px",
+                px: 4,
+                textTransform: "none",
+                boxShadow: 1,
+                '&:hover': {
+                  backgroundColor: "rgba(255, 0, 0, 0.08)",
+                },
+              }}
+            >
+              Go Back
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              sx={{
+                borderRadius: "20px",
+                px: 4,
+                textTransform: "none",
+                boxShadow: 1,
+                '&:hover': {
+                  backgroundColor: theme.palette.primary.dark,
+                },
+              }}
+            >
+              {creating ? "Create Room" : "Join Room"}
+            </Button>
+          </Stack>
+        </Stack>
+      </Box>
+    </Box>
   );
 };

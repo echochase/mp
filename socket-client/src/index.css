@@ -51,7 +51,7 @@ h1 {
   color: var(--text);
 }
 
-h3, div {
+h2, h3, div, p {
   color: var(--text);
 }
 

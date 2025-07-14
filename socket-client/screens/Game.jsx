@@ -304,8 +304,32 @@ export const Game = ({ socket, name, room }) => {
         player.powerUps[actionType] -= 1;
       }
     } else {
-      setPendingAttackType(actionType);
-      setAnchorEl(event.currentTarget);
+      const otherPlayer = players.find((p) => p.name !== name);
+
+      if (players.length === 2 && otherPlayer) {
+        const remaining = getRemainingPowerUps(player, declaredActions);
+        const isBluff = powerUps.includes(actionType) && remaining[actionType] <= 0;
+
+        const newDeclaredActions = [
+          ...declaredActions,
+          { index: declaredActions.length, actionType, target: otherPlayer.name, bluff: isBluff },
+        ];
+
+        setDeclaredActions(newDeclaredActions);
+
+        const hasBluff = newDeclaredActions.some(
+          (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] === 0
+        );
+        setBluffWarning(hasBluff);
+
+        if (powerUps.includes(actionType)) {
+          player.powerUps[actionType] -= 1;
+        }
+      } else {
+        // Open the target menu as usual
+        setPendingAttackType(actionType);
+        setAnchorEl(event.currentTarget);
+      }
     }
   };
 
@@ -413,7 +437,7 @@ export const Game = ({ socket, name, room }) => {
         )}
 
         {defenceWarning && (
-          <p style={{ color: "yellow", marginBottom: "10px" }}>
+          <p className="warning">
             You have declared both Defend and Energy Shield. Are you sure?
             <br />
             You can only execute one of these.
