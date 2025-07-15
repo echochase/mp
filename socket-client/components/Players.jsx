@@ -43,40 +43,41 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
         return (
           <div
             key={name}
-            className={className}
+            className="player-wrapper"
             style={{
               position: "absolute",
               left: "50%",
               top: "50%",
-              transform: `translate(${x}px, ${y}px) translate(-50%, -50%)`,
-              transformOrigin: "center",
-              color: name === you ? youColor : hp <= 0 ? eliminatedColor : tileText,
-              borderRadius: "10px",
-              padding: "8px",
-              minWidth: "80px",
-              textAlign: "center",
-              boxShadow: theme.shadows[3]
             }}
           >
-            {blockAnimations?.[name] && (
-              <div className={`animation-pulse animation-${blockAnimations[name]}`} />
-            )}
-            <div>{name}</div>
-            <div className="healthbar">
-              {[0, 1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className={`hp-segment ${i < hp ? 'filled' : 'empty'}`}
-                />
-              ))}
-            </div>
-            {stage === "execution" && declarationsMap[name] && (
-              <div className="player-declarations" style={{ marginTop: "4px", fontSize: "12px" }}>
-                {declarationsMap[name].map((a, i) => (
-                  <div key={i}>{a}</div>
+            <div
+              className={className + " fade-in"}
+              style={{
+                color: name === you ? youColor : hp <= 0 ? eliminatedColor : tileText,
+                boxShadow: theme.shadows[3],
+                transform: `translate(${x}px, ${y}px) translate(-50%, -50%)`
+              }}
+            >
+              {blockAnimations?.[name] && (
+                <div className={`animation-pulse animation-${blockAnimations[name]}`} />
+              )}
+              <div>{name}</div>
+              <div className="healthbar">
+                {[0, 1, 2, 3, 4].map(i => (
+                  <div
+                    key={i}
+                    className={`hp-segment ${i < hp ? 'filled' : 'empty'}`}
+                  />
                 ))}
               </div>
-            )}
+              {stage === "execution" && declarationsMap[name] && (
+                <div className="player-declarations" style={{ marginTop: "4px", fontSize: "12px" }}>
+                  {declarationsMap[name].map((a, i) => (
+                    <div key={i}>{a}</div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         );
       })}

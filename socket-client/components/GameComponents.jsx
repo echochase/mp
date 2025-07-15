@@ -1,4 +1,5 @@
 import { Menu, MenuItem, Modal } from "@mui/material";
+import { useEffect, useRef } from "react";
 
 export const WinningModal = ({ end, setEnd, winner }) => {
   return (
@@ -33,6 +34,15 @@ export const LogModal = ({
   stage,
   winner,
 }) => {
+  const logEndRef = useRef(null);
+
+  // Scroll to bottom on new log
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
+    }
+  }, [turnLogs, openLog]);
+
   return (
     <Modal open={openLog} onClose={() => setOpenLog(false)}>
       <div className="modal center">
@@ -41,7 +51,7 @@ export const LogModal = ({
           Turn: {turnCount}, Stage: {stage}
         </strong>
         <strong>You: {name}</strong>
-        <div className="mobile-log">
+        <div className="mobile-log" ref={logEndRef}>
           {turnLogs.map((log, index) => (
             <div key={index}>{log}</div>
           ))}

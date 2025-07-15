@@ -46,7 +46,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<HomePage socket={socket} />} />
         <Route path="/create" element={<EnterDetails {...sharedProps} creating={true} />} />
         <Route path="/join" element={<EnterDetails {...sharedProps} creating={false} />} />
         <Route path="/lobby/:roomCode" element={<Lobby {...sharedProps} />} />

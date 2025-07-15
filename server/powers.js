@@ -1,7 +1,7 @@
 function rollPowerUp() {
   const roll = Math.random();
   if (roll < 0.45) return "special";
-  if (roll < 0.7) return "heal";
+  if (roll < 0.68) return "heal";
   if (roll < 0.85) return "cruelty";
   return "prowess";
 }

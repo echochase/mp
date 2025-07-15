@@ -1,4 +1,4 @@
-const rooms = require('./rooms');
+const { rooms } = require('./rooms');
 const { rollPowerUp, tryUsePowerUp } = require('./powers');
 
 function emitNextTurn(io, roomId) {

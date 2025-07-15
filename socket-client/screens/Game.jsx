@@ -398,9 +398,9 @@ export const Game = ({ socket, name, room }) => {
             ))}
           </div>
           {winner !== "" && (
-            <div className="center">
-              {winner ? <h3>Result: {winner} wins</h3> : <h3>Result: Draw</h3>}
-            </div>
+            <p>
+              {winner ? <h4>Result: {winner} wins</h4> : <h4>Result: Draw</h4>}
+            </p>
           )}
         </div>
       )}

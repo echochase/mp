@@ -24,8 +24,7 @@ body {
   place-items: center;
   min-width: 100vw;
   min-height: 100vh;
-
-  background-color: var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: inherit;
   line-height: inherit;

@@ -3,6 +3,14 @@ import { useNavigate } from "react-router-dom";
 
 const updates = [
   {
+    version: "v0.1.1",
+    date: "July 15, 2025",
+    notes: [
+      "More UI revamps just to feel better about doing some work.",
+      "Slight tweaks to the power-up system to favour cruelty against heals.",
+    ],
+  },
+  {
     version: "v0.1.0",
     date: "July 14, 2025",
     notes: [
@@ -19,7 +27,7 @@ export const UpdateNotes = () => {
   return (
     <Box>
       <Typography
-        variant="h3"
+        variant="h4"
         fontWeight={600}
         gutterBottom
       >

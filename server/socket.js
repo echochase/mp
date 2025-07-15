@@ -1,10 +1,15 @@
-const rooms = require('./rooms');
+const { rooms, onlineState } = require('./rooms');
 const { rollPowerUp } = require('./powers');
 const { emitNextTurn, processTurn } = require('./game');
 
 module.exports = function(io) {
+  setInterval(() => {
+    io.emit("online-players", onlineState.count);
+  }, 60000);
   io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
+    onlineState.count++;
+    console.log(`A user connected: ${socket.id} Online: ${onlineState.count}.`);
+    socket.emit("online-players", onlineState.count);
 
     socket.on('create-room', (playerName) => {
       const room = generateRoomCode();
@@ -24,7 +29,7 @@ module.exports = function(io) {
       socket.emit('set-leader', playerName);
 
       io.to(room).emit('new-player', rooms[room].players.map(slimPlayer));
-      console.log(`Room ${room} created by ${playerName}`);
+      console.log(`Room ${room} created by ${socket.id} with name ${playerName}`);
     });
 
     socket.on("join-room", (room, playerName) => {
@@ -41,7 +46,7 @@ module.exports = function(io) {
           socket.join(room);
           io.to(room).emit("new-player", roomData.players.map(slimPlayer));
           socket.emit("join-success", room);
-          console.log(`${playerName} joined room ${room}`);
+          console.log(`${socket.id} joined room ${room} as ${playerName}`);
         }
       } else {
         socket.emit("non-existent-error");
@@ -236,11 +241,14 @@ module.exports = function(io) {
     });
 
     socket.on('disconnect', () => {
+      onlineState.count--;
+      let found = false;
       for (const [roomId, roomData] of Object.entries(rooms)) {
         const index = roomData.players.findIndex(p => p.socketId === socket.id);
+
         if (index !== -1) {
           const [removedPlayer] = roomData.players.splice(index, 1);
-          console.log(`${removedPlayer.name} disconnected from room ${roomId}`);
+          console.log(`${removedPlayer.name} disconnected from room ${roomId}. Online: ${onlineState.count}`);
 
           if (roomData.players.length === 0) {
             delete rooms[roomId];
@@ -248,8 +256,14 @@ module.exports = function(io) {
           } else {
             io.to(roomId).emit('new-player', roomData.players.map(slimPlayer));
           }
+
+          found = true;
           break;
         }
+      }
+
+      if (!found) {
+        console.log(`Socket ${socket.id} disconnected, not found in any room. Online: ${onlineState.count}`);
       }
     });
   });

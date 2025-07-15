@@ -22,17 +22,20 @@
   padding: 50px;
   transition: all 0.3s ease;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+}
+
+.fade-in {
   animation: fadeInPlayer 0.4s ease;
 }
 
 @keyframes fadeInPlayer {
   from {
-    transform: scale(0.9);
     opacity: 0;
+    transform: scale(0.8);
   }
   to {
-    transform: scale(1);
     opacity: 1;
+    transform: scale(1);
   }
 }
 

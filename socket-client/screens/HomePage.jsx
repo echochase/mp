@@ -1,10 +1,23 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Button, Typography, Stack, Fade } from "@mui/material";
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 
-export const HomePage = () => {
+export const HomePage = ({ socket }) => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [onlineCount, setOnlineCount] = useState(null);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleOnlinePlayers = (count) => setOnlineCount(count);
+    console.log("Received online count:", onlineCount);
+    socket.on("online-players", handleOnlinePlayers);
+
+    return () => {
+      socket.off("online-players", handleOnlinePlayers);
+    };
+  }, [socket]);
 
   return (
     <Box
@@ -108,8 +121,13 @@ export const HomePage = () => {
         mt={5}
         sx={{ position: "absolute", bottom: 16 }}
       >
-        Version 0.1.0
+        Version 0.1.1
       </Typography>
+      
+      {false && onlineCount && <Box display="flex" alignItems="center" gap={1} sx={{ position: "absolute", bottom: 50 }}>
+        <FiberManualRecordIcon sx={{ color: 'green', fontSize: '14px' }} />
+        <Typography variant="body2">{onlineCount} player{onlineCount !== 1 ? 's' : ''} online</Typography>
+      </Box>}
     </Box>
   );
 };

@@ -61,7 +61,7 @@ export const ColorModeProvider = ({ children }) => {
   useEffect(() => {
     // Apply CSS variables for non-MUI global styles
     const isDark = mode === "dark";
-    document.body.style.setProperty("--bg", isDark ? "#121212" : "#eeeeee");
+    document.body.style.setProperty("--bg", isDark ? "linear-gradient(145deg, #1e1e1e, #2c2c2c)" : "linear-gradient(145deg, #e6e6e6, #ffffff)");
     document.body.style.setProperty("--text", isDark ? "white" : "#242424");
     document.body.style.setProperty("--border", isDark ? "white" : "black");
     document.body.style.setProperty("--button-bg", isDark ? "#1a1a1a" : "#646cff");
