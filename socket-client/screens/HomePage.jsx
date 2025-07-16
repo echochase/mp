@@ -121,10 +121,10 @@ export const HomePage = ({ socket }) => {
         mt={5}
         sx={{ position: "absolute", bottom: 16 }}
       >
-        Version 0.1.1
+        Version 0.2.0
       </Typography>
       
-      {false && onlineCount && <Box display="flex" alignItems="center" gap={1} sx={{ position: "absolute", bottom: 50 }}>
+      {onlineCount && <Box display="flex" alignItems="center" gap={1} sx={{ position: "absolute", bottom: 50 }}>
         <FiberManualRecordIcon sx={{ color: 'green', fontSize: '14px' }} />
         <Typography variant="body2">{onlineCount} player{onlineCount !== 1 ? 's' : ''} online</Typography>
       </Box>}

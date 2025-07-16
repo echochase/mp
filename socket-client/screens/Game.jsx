@@ -10,9 +10,12 @@ import {
   LogModal,
   TargetMenu,
   WinningModal,
+  SpectatorsPanel,
 } from "../components/GameComponents";
 import "../styles/game.css";
 import "../styles/common.css";
+import "../styles/spectators.css";
+import { useLocation } from "react-router-dom";
 
 export const Game = ({ socket, name, room }) => {
   const [turnCount, setTurnCount] = useState(0);
@@ -35,6 +38,10 @@ export const Game = ({ socket, name, room }) => {
   const [defenceError, setDefenceError] = useState(false);
   const [bluffWarning, setBluffWarning] = useState(false);
   const [fewActionsWarning, setFewActionsWarning] = useState(false);
+  const [spectators, setSpectators] = useState([]);
+  
+  const location = useLocation();
+  const isSpectator = location.state?.spectator || false;
 
   const isMobile = useMediaQuery('(max-width:600px)');
   const open = Boolean(anchorEl);
@@ -137,11 +144,12 @@ export const Game = ({ socket, name, room }) => {
       );
     };
 
-    const updatePlayers = (playersList) => {
+    const updatePlayers = (playersList, spectators) => {
       setPlayers(playersList.map((p) => ({
         ...p,
         powerUps: p.powerUps ?? {},
       })));
+      setSpectators(spectators ?? []);
     };
 
     const handleTurnLog = (message) => {
@@ -389,7 +397,7 @@ export const Game = ({ socket, name, room }) => {
           <p style={{ fontSize: "12.5px" }}>Game Room: {room}</p>
           <div className="game-info">
             <strong>Turn: {turnCount}</strong>
-            <strong>You: {name}</strong>
+            <strong>You: {name} {isSpectator && "(Spectator)"}</strong>
             <strong>Stage: {stage}</strong>
           </div>
           <div className="turn-log">
@@ -414,18 +422,38 @@ export const Game = ({ socket, name, room }) => {
           blockAnimations={activeAnimations}
         />
 
-        {stage === "declaration" ? (
-          <ChooseDeclarations {...{ confirmed, declaredActions, declareAction, deleteAction, name }} />
-        ) : (
-          <ChooseExecutions {...{ confirmed, declaredActions, selectedExecutions, confirmExecution, executeAction }} />
-        )}
+        {isSpectator ? (
+          <div>👁️ You are spectating this match and cannot interact with it.</div>
+        ) : !isEliminated ? (
+          stage === "declaration" ? (
+            <ChooseDeclarations
+              {...{
+                confirmed,
+                declaredActions,
+                declareAction,
+                deleteAction,
+                name,
+              }}
+            />
+          ) : (
+            <ChooseExecutions
+              {...{
+                confirmed,
+                declaredActions,
+                selectedExecutions,
+                confirmExecution,
+                executeAction,
+              }}
+            />
+          )
+        ) : null}
 
         {actionsError && <Typography color="error" sx={{ mb: 1 }}>Please declare exactly 3 actions!</Typography>}
 
         {isEliminated ? (
           <p style={{ color: "red", marginBottom: "10px" }}>You have been eliminated and cannot take actions.</p>
         ) : (
-          stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
+          !isSpectator && stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
         )}
 
         {defenceWarning && (
@@ -454,9 +482,10 @@ export const Game = ({ socket, name, room }) => {
           Leave Game
         </button>
 
+        <SpectatorsPanel spectators={spectators} />
         <TargetMenu {...{ anchorEl, open, closeTargetMenu, players, name }} />
         <WinningModal {...{ end, setEnd, winner }} />
-        <LogModal {...{ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner }} />
+        <LogModal {...{ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner, isSpectator }} />
 
         <Modal open={fewActionsWarning} onClose={() => setFewActionsWarning(false)}>
           <div className="modal center">

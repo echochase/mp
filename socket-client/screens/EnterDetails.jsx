@@ -39,8 +39,13 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
     if (!socket) return;
 
     const handleRoomExists = () => socket.emit("join-room", room, name);
-    const handleJoinSuccess = (roomJoined) =>
-      navigate(`/lobby/${roomJoined}`, { state: { creating: false } });
+    const handleJoinSuccess = (roomJoined, isSpectator = false) =>
+      navigate(`/${isSpectator ? "play" : "lobby"}/${roomJoined}`, {
+        state: {
+          creating: false,
+          spectator: isSpectator,
+        },
+      });
 
     const handleRoomCreated = (roomCode) => {
       setRoom(roomCode);
@@ -61,12 +66,6 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       setLoading(false);
     };
 
-    const handleStartedError = () => {
-      alert("Oops! That game's already started.");
-      setRoom("");
-      setLoading(false);
-    };
-
     const handleFullError = () => {
       alert("That room is full! Try another one.");
       setRoom("");
@@ -77,7 +76,6 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
     socket.on("join-success", handleJoinSuccess);
     socket.on("room-created", handleRoomCreated);
     socket.on("room-not-found", handleRoomNotFound);
-    socket.on("started-error", handleStartedError);
     socket.on("duplicate-name-error", handleDuplicateNameError);
     socket.on("full-error", handleFullError);
 
@@ -86,7 +84,6 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       socket.off("join-success", handleJoinSuccess);
       socket.off("room-created", handleRoomCreated);
       socket.off("room-not-found", handleRoomNotFound);
-      socket.off("started-error", handleStartedError);
       socket.off("duplicate-name-error", handleDuplicateNameError);
       socket.off("full-error", handleFullError);
     };

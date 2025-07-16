@@ -4,7 +4,7 @@ import "../styles/players.css";
 export const Players = ({ players, you, totalDeclarations, stage, blockAnimations }) => {
   const isMobile = useMediaQuery('(max-width:600px)');
   const theme = useTheme();
-  const radiusFactor = isMobile ? 0.3 : 0.45;
+  const radiusFactor = isMobile ? 0.4 : 0.55;
   const playerCount = players.length;
   const radius = 350 + (playerCount - 2) * 10;
   const declarationsMap = Object.fromEntries(totalDeclarations);
@@ -20,7 +20,7 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
         position: "relative",
         width: "100%",
         height: "100%",
-        marginTop: `${-300 + playerCount * 100 - (playerCount - 3) * 75}px`,
+        marginTop: `${-270 + playerCount * 100 - (playerCount - 3) * 75}px`,
         marginBottom: `${playerCount * 20}px`
       }}
     >
@@ -61,6 +61,7 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
               {blockAnimations?.[name] && (
                 <div className={`animation-pulse animation-${blockAnimations[name]}`} />
               )}
+              {console.log(blockAnimations[name])}
               <div>{name}</div>
               <div className="healthbar">
                 {[0, 1, 2, 3, 4].map(i => (
@@ -71,7 +72,7 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
                 ))}
               </div>
               {stage === "execution" && declarationsMap[name] && (
-                <div className="player-declarations" style={{ marginTop: "4px", fontSize: "12px" }}>
+                <div className="player-declarations">
                   {declarationsMap[name].map((a, i) => (
                     <div key={i}>{a}</div>
                   ))}

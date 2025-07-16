@@ -9,7 +9,7 @@
 
 .player-tile {
   position: absolute;
-  width: 140px;
+  width: 150px;
   height: 95px;
   background-color: var(--tile-bg);
   color: var(--text);
@@ -19,7 +19,7 @@
   align-items: center;
   border-radius: 20px;
   text-align: center;
-  padding: 50px;
+  padding: 30px;
   transition: all 0.3s ease;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
 }
@@ -91,6 +91,8 @@
 .player-declarations {
   display: flex;
   flex-direction: column;
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 .animation-pulse {
@@ -155,5 +157,36 @@
     justify-content: center;
     align-items: center;
     margin: -70px 0 0px 0;
+  }
+
+  .healthbar {
+    display: flex;
+    gap: 2px;
+    margin-top: 6px;
+    justify-content: center;
+  }
+  
+  .player-tile {
+    width: 110px;
+    height: 75px;
+    background-color: var(--tile-bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
+    text-align: center;
+    padding: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  }
+  
+  .hp-segment {
+    width: 15px;
+    height: 5.5px;
+    border-radius: 2px;
+    background-color: rgb(177, 177, 177);
+    border: 0.5px solid black;
   }
 }

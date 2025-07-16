@@ -3,6 +3,19 @@ import { useNavigate } from "react-router-dom";
 
 const updates = [
   {
+    version: "v0.2.0",
+    date: "July 16, 2025",
+    notes: [
+      "Yes, we jumped from v0.1.1 to v0.2.0 because this was a pretty big update.",
+      "Enabled spectator functionality for users that want to stalk a game that's already started.",
+      "Added a player count so we all know how many people are playing.",
+      "Some changes to the UI so that it looks actually decent; still probably needs further tweaks though.",
+      "Fixed the animations to prevent them getting blocked by the browser.",
+      "On that note: I haven't actually added the skip animations toggle yet, it remains a dummy for now.",
+      "Added a few defences to make sure the site isn't <b>XSS Vulnerable (TM)</b>. Please let me know if something does fail though!",
+    ],
+  },
+  {
     version: "v0.1.1",
     date: "July 15, 2025",
     notes: [
@@ -15,6 +28,7 @@ const updates = [
     date: "July 14, 2025",
     notes: [
       "Added this Update Notes section so I can keep better track of my own work 😅😅😅",
+      "This is the MVP release; previous versions were deployed but won't be recorded here as they're considered incomplete.",
       "In 1v1 games, selecting an attack will automatically aim it at your opponent.",
       "Reworded some in-game prompts to feel a little more natural and welcoming.",
       "Massive revamps to the UI so that it looks actually decent."

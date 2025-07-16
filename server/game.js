@@ -93,6 +93,7 @@ function processTurn(io, roomId, currentActions) {
 
     const attacker = roomData.players.find(p => p.name === action.playerName);
     const target = roomData.players.find(p => p.name === action.targetName);
+    io.to(roomId).emit(`${action.action}-occurred`, action.playerName);
     if (!attacker || !target) {
       action.result = 'invalid target';
       return;

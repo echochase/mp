@@ -25,4 +25,14 @@ function tryUsePowerUp(player, actionType, targetName = null) {
   return { success: true, result: actionType };
 }
 
-module.exports = { rollPowerUp, tryUsePowerUp };
+const ACTION_NAME_MAP = {
+  "defend": "Defend",
+  "attack": "Attack",
+  "special": "Special Attack",
+  "cruelty": "Cruelty",
+  "heal": "Heal",
+  "prowess": "Prowess",
+  "energy-shield": "Energy Shield",
+};
+
+module.exports = { rollPowerUp, tryUsePowerUp, ACTION_NAME_MAP };

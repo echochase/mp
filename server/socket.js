@@ -1,5 +1,5 @@
 const { rooms, onlineState } = require('./rooms');
-const { rollPowerUp } = require('./powers');
+const { rollPowerUp, ACTION_NAME_MAP } = require('./powers');
 const { emitNextTurn, processTurn } = require('./game');
 
 module.exports = function(io) {
@@ -17,6 +17,7 @@ module.exports = function(io) {
       rooms[room] = {
         id: room,
         players: [createPlayer(playerName, socket.id)],
+        spectators: [],
         leader: playerName,
         started: false,
         playerTurn: 0,
@@ -35,12 +36,25 @@ module.exports = function(io) {
     socket.on("join-room", (room, playerName) => {
       const roomData = rooms[room];
       if (roomData) {
-        if (roomData.started) {
-          socket.emit("started-error");
+        if (roomData.players.some(p => p.name === playerName)) {
+          socket.emit("duplicate-name-error");
+        } else if (roomData.started) {
+          socket.join(room);
+          roomData.spectators.push({ socketId: socket.id, name: playerName }); // track spectators
+          socket.emit("join-success", room, true); // true = isSpectator
+          io.to(room).emit("players-update",
+            roomData.players.map(slimPlayer),
+            roomData.spectators.map(s => s.name)
+          );
+          socket.emit("next-turn", {
+            turnCount: roomData.turnCount,
+          });
+          if (roomData.turnStage) {
+            socket.emit("stage-update", roomData.turnStage);
+          }
+          console.log(`${socket.id} joined room ${room} as a spectator`);
         } else if (roomData.players.length > 5) {
           socket.emit("full-error");
-        } else if (roomData.players.some(p => p.name === playerName)) {
-          socket.emit("duplicate-name-error");
         } else {
           roomData.players.push(createPlayer(playerName, socket.id));
           socket.join(room);
@@ -58,12 +72,7 @@ module.exports = function(io) {
       if (roomData) {
         if (name === roomData.leader) {
           roomData.players = roomData.players.filter(p => p.name !== playerName);
-          io.to(room).emit("players-update", roomData.players.map(p => ({
-            name: p.name,
-            hp: p.hp,
-            powerUps: p.powerUps,
-            ready: p.ready,
-          })));
+          io.to(room).emit("players-update", roomData.players.map(slimPlayer), roomData.spectators.map(s => s.name));
         }
       } else {
         socket.emit("non-existent-error");
@@ -79,12 +88,7 @@ module.exports = function(io) {
 
       player.ready = true;
 
-      io.to(room).emit("players-update", roomData.players.map(p => ({
-        name: p.name,
-        hp: p.hp,
-        powerUps: p.powerUps,
-        ready: p.ready,
-      })));
+      io.to(room).emit("players-update", roomData.players.map(slimPlayer), roomData.spectators.map(s => s.name));
     });
 
     socket.on('check-room', (room) => {
@@ -116,7 +120,7 @@ module.exports = function(io) {
 
         const actionTypesOnly = {};
         for (const [player, acts] of Object.entries(room.declaredActions)) {
-          actionTypesOnly[player] = acts.map(a => a.actionType);
+          actionTypesOnly[player] = acts.map(a => ACTION_NAME_MAP[a.actionType] || a.actionType);
         }
 
         io.to(roomId).emit("all-declared", actionTypesOnly);
@@ -199,12 +203,7 @@ module.exports = function(io) {
     socket.on("get-players", (room) => {
       const roomData = rooms[room];
       if (roomData) {
-        socket.emit("players-update", roomData.players.map(p => ({
-          name: p.name,
-          hp: p.hp,
-          powerUps: p.powerUps,
-          ready: p.ready,
-        })));
+        socket.emit("players-update", roomData.players.map(slimPlayer), roomData.spectators.map(s => s.name));
       }
     });
 
@@ -212,50 +211,86 @@ module.exports = function(io) {
       const roomData = rooms[room];
       if (!roomData) return;
 
+      // 👤 First check if it's a player
       const playerIndex = roomData.players.findIndex(p => p.name === playerName);
-      if (playerIndex === -1) return;
+      if (playerIndex !== -1) {
+        const [removedPlayer] = roomData.players.splice(playerIndex, 1);
+        console.log(`${removedPlayer.name} left room ${room}`);
 
-      const [removedPlayer] = roomData.players.splice(playerIndex, 1);
-      console.log(`${removedPlayer.name} left room ${room}`);
+        if (roomData.players.length === 0) {
+          delete rooms[room];
+          console.log(`Room ${room} deleted as it became empty`);
+          return;
+        }
 
-      if (roomData.players.length === 0) {
-        delete rooms[room];
-        console.log(`Room ${room} deleted as it became empty`);
+        if (roomData.playerTurn >= roomData.players.length) {
+          roomData.playerTurn = 0;
+        }
+
+        io.to(room).emit("players-update",
+          roomData.players.map(slimPlayer),
+          roomData.spectators.map(s => s.name)
+        );
+
+        if (roomData.started) {
+          emitNextTurn(io, room);
+        }
+
         return;
       }
 
-      if (roomData.playerTurn >= roomData.players.length) {
-        roomData.playerTurn = 0;
-      }
+      // 👁️ Otherwise, check if it's a spectator
+      if (roomData.spectators) {
+        const spectatorIndex = roomData.spectators.findIndex(s => s.name === playerName);
+        if (spectatorIndex !== -1) {
+          const [removedSpectator] = roomData.spectators.splice(spectatorIndex, 1);
+          console.log(`Spectator ${removedSpectator.name} left room ${room}`);
 
-      io.to(room).emit("players-update", roomData.players.map(p => ({
-        name: p.name,
-        hp: p.hp,
-        powerUps: p.powerUps,
-        ready: p.ready,
-      })));
-
-      if (roomData.started) {
-        emitNextTurn(io, room);
+          io.to(room).emit("players-update",
+            roomData.players.map(slimPlayer),
+            roomData.spectators.map(s => s.name)
+          );
+        }
       }
     });
 
     socket.on('disconnect', () => {
       onlineState.count--;
       let found = false;
-      for (const [roomId, roomData] of Object.entries(rooms)) {
-        const index = roomData.players.findIndex(p => p.socketId === socket.id);
 
-        if (index !== -1) {
-          const [removedPlayer] = roomData.players.splice(index, 1);
+      for (const [roomId, roomData] of Object.entries(rooms)) {
+        const playerIndex = roomData.players.findIndex(p => p.socketId === socket.id);
+
+        if (playerIndex !== -1) {
+          const [removedPlayer] = roomData.players.splice(playerIndex, 1);
           console.log(`${removedPlayer.name} disconnected from room ${roomId}. Online: ${onlineState.count}`);
 
           if (roomData.players.length === 0) {
             delete rooms[roomId];
             console.log(`Room ${roomId} deleted as it became empty`);
           } else {
-            io.to(roomId).emit('new-player', roomData.players.map(slimPlayer));
+            // 🔄 Emit updated players & spectators to everyone
+            io.to(roomId).emit("players-update",
+              roomData.players.map(slimPlayer),
+              roomData.spectators.map(s => s.name)
+            );
+            io.to(roomId).emit("new-player", roomData.players.map(slimPlayer));
           }
+
+          found = true;
+          break;
+        }
+
+        const specIndex = roomData.spectators.findIndex(s => s.socketId === socket.id);
+        if (specIndex !== -1) {
+          const [removedSpectator] = roomData.spectators.splice(specIndex, 1);
+          console.log(`Spectator ${removedSpectator.name} left room ${roomId}.`);
+
+          // 🔄 Emit updated players & spectators to everyone
+          io.to(roomId).emit("players-update",
+            roomData.players.map(slimPlayer),
+            roomData.spectators.map(s => s.name)
+          );
 
           found = true;
           break;
@@ -288,7 +323,7 @@ function createPlayer(name, socketId) {
 }
 
 function slimPlayer(p) {
-  return { name: p.name, hp: p.hp, ready: p.ready };
+  return { name: p.name, hp: p.hp, ready: p.ready, powerUps: p.powerUps };
 }
 
 function generateRoomCode() {

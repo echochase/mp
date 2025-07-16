@@ -1,0 +1,9 @@
+export const ACTION_NAME_MAP = {
+  "defend": "Defend",
+  "attack": "Attack",
+  "special": "Special Attack",
+  "cruelty": "Cruelty",
+  "heal": "Heal",
+  "prowess": "Prowess",
+  "energy-shield": "Energy Shield",
+};

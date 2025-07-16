@@ -1,5 +1,6 @@
-import { Menu, MenuItem, Modal } from "@mui/material";
+import { Menu, MenuItem, Modal, Typography } from "@mui/material";
 import { useEffect, useRef } from "react";
+import { ACTION_NAME_MAP } from "../utils";
 
 export const WinningModal = ({ end, setEnd, winner }) => {
   return (
@@ -33,6 +34,7 @@ export const LogModal = ({
   turnCount,
   stage,
   winner,
+  isSpectator
 }) => {
   const logEndRef = useRef(null);
 
@@ -50,7 +52,7 @@ export const LogModal = ({
         <strong>
           Turn: {turnCount}, Stage: {stage}
         </strong>
-        <strong>You: {name}</strong>
+        <strong>You: {name} {isSpectator && "(Spectator)"}</strong>
         <div className="mobile-log" ref={logEndRef}>
           {turnLogs.map((log, index) => (
             <div key={index}>{log}</div>
@@ -225,7 +227,7 @@ export const ChooseDeclarations = ({
             key={idx}
             onClick={() => deleteAction(idx)}
           >
-            {act.actionType} {act.target !== name && `→ ${act.target}`}
+            {ACTION_NAME_MAP[act.actionType]} {act.target !== name && `→ ${act.target}`}
           </button>
         ))}
       </div>
@@ -244,7 +246,7 @@ export const ChooseDeclarations = ({
               className={act.bluff ? "bluff" : ""}
               onClick={() => deleteAction(idx)}
             >
-              {act.actionType} {act.target !== name && `→ ${act.target}`}
+              {ACTION_NAME_MAP[act.actionType]} {act.target !== name && `→ ${act.target}`}
             </div>
           ))}
         </>
@@ -283,7 +285,7 @@ export const ChooseExecutions = ({
                   onClick={() => executeAction(idx)}
                   disabled={act.bluff}
                 >
-                  {act.actionType} → {act.target}
+                  {ACTION_NAME_MAP[act.actionType]} → {act.target}
                 </button>
               );
             })}
@@ -303,7 +305,7 @@ export const ChooseExecutions = ({
                     key={idx}
                     onClick={() => executeAction(idx)}
                   >
-                    {act.actionType} → {act.target}
+                    {ACTION_NAME_MAP[act.actionType]} → {act.target}
                   </button>
                 );
               })}
@@ -322,3 +324,26 @@ export const ChooseExecutions = ({
     </div>
   );
 };
+
+export const SpectatorsPanel = ({ spectators }) => {
+  return (
+    <div className="spectators-panel">
+      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+        Spectators 👁️
+      </Typography>
+      {spectators && spectators.length > 0 ? (
+        <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
+          {spectators.map((name, idx) => (
+            <li key={idx} style={{ fontSize: "14px", marginBottom: "4px" }}>
+              👤 {name}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Typography variant="body2" sx={{ fontStyle: "italic", color: "gray" }}>
+          No spectators yet
+        </Typography>
+      )}
+    </div>
+  )
+}
