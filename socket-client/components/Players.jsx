@@ -20,7 +20,7 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
         position: "relative",
         width: "100%",
         height: "100%",
-        marginTop: `${-270 + playerCount * 100 - (playerCount - 3) * 75}px`,
+        marginTop: `${-270 + playerCount * 100 - (playerCount - 3) * 75 - (playerCount === 2 ? 100 : 0)}px`,
         marginBottom: `${playerCount * 20}px`
       }}
     >
@@ -61,7 +61,6 @@ export const Players = ({ players, you, totalDeclarations, stage, blockAnimation
               {blockAnimations?.[name] && (
                 <div className={`animation-pulse animation-${blockAnimations[name]}`} />
               )}
-              {console.log(blockAnimations[name])}
               <div>{name}</div>
               <div className="healthbar">
                 {[0, 1, 2, 3, 4].map(i => (

@@ -19,6 +19,17 @@ export const HomePage = ({ socket }) => {
     };
   }, [socket]);
 
+  useEffect(() => {
+    const logVisit = async () => {
+      try {
+        await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/log-visit`);
+      } catch (err) {
+        console.error('Failed to log visit:', err);
+      }
+    };
+    logVisit();
+  }, []);
+
   return (
     <Box
       display="flex"
