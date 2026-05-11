@@ -476,6 +476,25 @@ export const Game = ({ socket, name, room, setRoom }) => {
             />
           )}
 
+          <section className="game-panel public-storage-panel compact-panel">
+            <div className="panel-heading small-heading">
+              <p className="eyebrow">Public board</p>
+              <h2>Storage Around the Table</h2>
+            </div>
+            <div className="opponent-storage-grid compact-storage-grid">
+              <div className="opponent-storage self-storage-card">
+                <strong>{me.name}</strong>
+                <StorageCards cards={me.storage} />
+              </div>
+              {opponents.map((player) => (
+                <div className="opponent-storage" key={player.name}>
+                  <strong>{player.name}</strong>
+                  <StorageCards cards={player.storage} compact />
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="game-panel hand-panel compact-panel">
             <div className="panel-heading split-heading small-heading">
               <div>
@@ -507,25 +526,6 @@ export const Game = ({ socket, name, room, setRoom }) => {
                   onPlay={() => beginPlayCard(card)}
                   onDiscard={() => discardCard(card)}
                 />
-              ))}
-            </div>
-          </section>
-
-          <section className="game-panel public-storage-panel compact-panel">
-            <div className="panel-heading small-heading">
-              <p className="eyebrow">Public board</p>
-              <h2>Storage Around the Table</h2>
-            </div>
-            <div className="opponent-storage-grid compact-storage-grid">
-              <div className="opponent-storage self-storage-card">
-                <strong>{me.name}</strong>
-                <StorageCards cards={me.storage} />
-              </div>
-              {opponents.map((player) => (
-                <div className="opponent-storage" key={player.name}>
-                  <strong>{player.name}</strong>
-                  <StorageCards cards={player.storage} compact />
-                </div>
               ))}
             </div>
           </section>
