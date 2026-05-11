@@ -58,8 +58,8 @@
   animation: turnCardPulse 1.2s ease-out;
 }
 
-.turn-card span,
-.player-row span {
+.turn-card > div > span,
+.player-row-identity > div > span {
   display: block;
   color: var(--text-muted);
   font-size: 0.84rem;
