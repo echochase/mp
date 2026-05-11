@@ -133,6 +133,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [newCardIds, setNewCardIds] = useState(new Set());
   const [turnPulse, setTurnPulse] = useState(0);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
+  const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
   const [dismissedRevealIds, setDismissedRevealIds] = useState(new Set());
   const [investorGoal, setInvestorGoal] = useState(null);
   const [actionModalCard, setActionModalCard] = useState(null);
@@ -223,7 +224,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
     return () => window.clearInterval(interval);
   }, [gameState?.pendingAction, gameState?.activeTrade?.state]);
 
-  useEffect(
+useEffect(
     () => () => {
       window.clearTimeout(newCardTimerRef.current);
       window.clearTimeout(noticeTimerRef.current);
@@ -348,111 +349,34 @@ export const Game = ({ socket, name, room, setRoom }) => {
       {error && <div className="game-toast danger-toast">{error}</div>}
       {noticeToast && <div className={`game-toast notice-toast ${noticeToast.type || "info"}`}>{noticeToast.text}</div>}
 
-      <section className="table-layout compact-table-layout">
-        <aside className="game-panel player-panel compact-panel">
-          <div className="panel-heading split-heading small-heading">
-            <div>
-              <p className="eyebrow">Players</p>
-              <h2>Seating Order</h2>
+      <section className="table-layout">
+        {/* ── LEFT SIDEBAR: progress + goals ── */}
+        <aside className="game-sidebar">
+          <MyProgressPanel me={me} isCurrent={me.name === gameState.currentPlayerName} />
+          <section className="game-panel goals-panel compact-panel compact-goals-panel">
+            <div className="panel-heading small-heading">
+              <p className="eyebrow">Private</p>
+              <h2>Your Goals</h2>
             </div>
-            <span className="deck-pill">{gameState.players.length} seated</span>
-          </div>
-
-          <SeatingOrder
-            players={gameState.players}
-            currentPlayerName={gameState.currentPlayerName}
-            meName={name}
-          />
-
-          <div className="player-score-list">
-            {gameState.players.map((player) => (
-              <div
-                className={`player-row compact-player-row ${player.name === name ? "you-row" : ""} ${
-                  player.name === gameState.currentPlayerName ? "current-player-row" : ""
-                }`}
-                key={player.name}
-              >
-                <div className="player-row-identity">
-                  <PlayerAvatar player={player} />
-                  <div>
-                    <strong>{player.name}</strong>
-                    <span>
-                    {player.name === name ? "You · " : ""}
-                    {player.handCount} hand · {player.storageCount} stored
-                    {!player.connected ? " · offline" : ""}
-                    </span>
-                  </div>
-                </div>
-                <b>{player.score} / 10</b>
-              </div>
-            ))}
-          </div>
-
-          <div className="deck-counts compact-deck-counts">
-            <span>Deck {gameState.deckCounts.playing}</span>
-            <span>Discard {gameState.deckCounts.playingDiscard}</span>
-            <span>Goals {gameState.deckCounts.goals}</span>
-          </div>
-        </aside>
-
-        <section className="main-table compact-main-table">
-          <section className="game-panel status-panel compact-panel compact-status-panel">
-            <div>
-              <p className="eyebrow">Status</p>
-              <h2>
-                {gameState.pendingAction
-                  ? "Reaction window"
-                  : gameState.pendingChoice || me.pendingChoice
-                    ? "Card choice pending"
-                    : gameState.activeTrade
-                      ? "Trade in progress"
-                      : me.isYourTurn
-                      ? me.mustDiscard
-                        ? "Discard down to 8"
-                        : "Your move"
-                      : `${currentPlayer?.name || "Someone"}'s turn`}
-              </h2>
-              <p>
-                {gameState.pendingAction
-                  ? "The action will resolve if nobody counters it in time."
-                  : gameState.pendingChoice || me.pendingChoice
-                    ? "Finish the open choice before taking other table actions."
-                    : gameState.activeTrade
-                      ? "Finish the trade flow before taking other table actions."
-                      : me.isYourTurn
-                      ? me.actionPlayed
-                        ? "Action used. You can still store resources, reroll, complete Investor, trade, or end your turn."
-                        : "Store resources, play one action, trade, reroll one goal, or complete Investor."
-                      : "Watch the table and plan your next lie."}
-              </p>
-            </div>
-
-            <div className="status-actions">
-              <button
-                className="ghost-button"
-                disabled={!me.canCreateTrade}
-                onClick={() => setTradeBuilderOpen(true)}
-              >
-                Trade
-              </button>
-              {!gameState.pendingAction && !gameState.pendingChoice && !me.pendingChoice && (
-                <button
-                  className="gold-button"
-                  disabled={!me.isYourTurn || me.mustDiscard || Boolean(gameState.winner) || tableLocked}
-                  onClick={endTurn}
-                >
-                  End Turn
-                </button>
-              )}
+            <div className="goals-grid compact-goals-grid">
+              {me.goals.map((goal, index) => (
+                <GoalCard
+                  key={goal.id || `${goal.key}-${index}`}
+                  goal={goal}
+                  index={index}
+                  disabled={Boolean(gameState.winner) || tableLocked}
+                  isYourTurn={me.isYourTurn}
+                  goalRerolled={me.goalRerolled}
+                  onReroll={() => rerollGoal(index)}
+                  onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
+                />
+              ))}
             </div>
           </section>
+        </aside>
 
-          <DiscardPileStack
-            playingCards={gameState.discardPile?.playing || []}
-            goalCards={gameState.discardPile?.goals || []}
-            onOpen={() => setDiscardPileOpen(true)}
-          />
-
+        {/* ── CENTRE: tabletop ── */}
+        <section className="tabletop-column">
           {gameState.pendingAction && (
             <PendingActionPanel
               pendingAction={gameState.pendingAction}
@@ -462,7 +386,6 @@ export const Game = ({ socket, name, room, setRoom }) => {
               hand={sortedHand}
             />
           )}
-
           {gameState.activeTrade && (
             <ActiveTradePanel
               trade={gameState.activeTrade}
@@ -475,40 +398,50 @@ export const Game = ({ socket, name, room, setRoom }) => {
               onScam={playScam}
             />
           )}
+          <TableTopView
+            players={gameState.players}
+            me={me}
+            currentPlayerName={gameState.currentPlayerName}
+            meName={name}
+            discardPile={gameState.discardPile}
+            deckCounts={gameState.deckCounts}
+            onOpenCardDiscard={() => setDiscardPileOpen(true)}
+            onOpenGoalDiscard={() => setGoalDiscardPileOpen(true)}
+          />
 
-          <section className="game-panel public-storage-panel compact-panel">
-            <div className="panel-heading small-heading">
-              <p className="eyebrow">Public board</p>
-              <h2>Storage Around the Table</h2>
-            </div>
-            <div className="opponent-storage-grid compact-storage-grid">
-              <div className="opponent-storage self-storage-card">
-                <strong>{me.name}</strong>
-                <StorageCards cards={me.storage} />
-              </div>
-              {opponents.map((player) => (
-                <div className="opponent-storage" key={player.name}>
-                  <strong>{player.name}</strong>
-                  <StorageCards cards={player.storage} compact />
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="game-panel hand-panel compact-panel">
+          <section className="game-panel hand-panel compact-panel compact-hand-strip">
             <div className="panel-heading split-heading small-heading">
               <div>
                 <p className="eyebrow">Your hand</p>
                 <h2>{me.hand.length} cards</h2>
               </div>
-              <div className="hand-sort-note">
-                <span>Resources</span>
-                <span>Special</span>
-                <span>Actions</span>
+              <div className="hand-header-right">
+                <div className="hand-sort-note">
+                  <span>Resources</span>
+                  <span>Special</span>
+                  <span>Actions</span>
+                </div>
+                {me.mustDiscard && <span className="danger-pill">Discard {me.hand.length - 8}</span>}
+                <div className="hand-action-buttons">
+                  <button
+                    className="ghost-button"
+                    disabled={!me.canCreateTrade}
+                    onClick={() => setTradeBuilderOpen(true)}
+                  >
+                    Trade
+                  </button>
+                  {!gameState.pendingAction && !gameState.pendingChoice && !me.pendingChoice && (
+                    <button
+                      className="gold-button"
+                      disabled={!me.isYourTurn || me.mustDiscard || Boolean(gameState.winner) || tableLocked}
+                      onClick={endTurn}
+                    >
+                      End Turn
+                    </button>
+                  )}
+                </div>
               </div>
-              {me.mustDiscard && <span className="danger-pill">Discard {me.hand.length - 8}</span>}
             </div>
-
             <div className="card-strip compact-card-strip">
               {sortedHand.map((card, displayIndex) => (
                 <PlayingCard
@@ -531,36 +464,30 @@ export const Game = ({ socket, name, room, setRoom }) => {
           </section>
         </section>
 
-        <aside className="side-stack compact-side-stack">
-          <section className="game-panel goals-panel compact-panel compact-goals-panel">
-            <div className="panel-heading small-heading">
-              <p className="eyebrow">Private</p>
-              <h2>Your Goals</h2>
+        {/* ── RIGHT SIDEBAR: seating order + history ── */}
+        <aside className="game-sidebar">
+          <section className="game-panel compact-panel">
+            <div className="panel-heading split-heading small-heading">
+              <div>
+                <p className="eyebrow">Players</p>
+                <h2>Seating Order</h2>
+              </div>
+              <span className="deck-pill">{gameState.players.length} seated</span>
             </div>
-
-            <div className="goals-grid compact-goals-grid">
-              {me.goals.map((goal, index) => (
-                <GoalCard
-                  key={goal.id || `${goal.key}-${index}`}
-                  goal={goal}
-                  index={index}
-                  disabled={Boolean(gameState.winner) || tableLocked}
-                  isYourTurn={me.isYourTurn}
-                  goalRerolled={me.goalRerolled}
-                  onReroll={() => rerollGoal(index)}
-                  onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
-                />
-              ))}
-            </div>
+            <SeatingOrder
+              players={gameState.players}
+              currentPlayerName={gameState.currentPlayerName}
+              meName={name}
+              showScore={false}
+            />
           </section>
-
           <section className="game-panel log-panel compact-panel compact-log-panel">
             <div className="panel-heading small-heading">
               <p className="eyebrow">History</p>
               <h2>Table Log</h2>
             </div>
             <div className="log-list compact-log-list">
-              {gameState.log.map((entry, index) => (
+              {gameState.log.slice().reverse().map((entry, index) => (
                 <p key={`${entry}-${index}`}>{entry}</p>
               ))}
             </div>
@@ -618,10 +545,18 @@ export const Game = ({ socket, name, room, setRoom }) => {
         />
       )}
 
-      {discardPileOpen && (
+      {goalDiscardPileOpen && (
         <DiscardPileModal
-          playingCards={gameState.discardPile?.playing || []}
+          title="Goal Discard"
           goalCards={gameState.discardPile?.goals || []}
+          onClose={() => setGoalDiscardPileOpen(false)}
+        />
+      )}
+
+      {discardPileOpen && gameState.discardPile?.playing && (
+        <DiscardPileModal
+          title="Card Discard"
+          playingCards={gameState.discardPile?.playing || []}
           onClose={() => setDiscardPileOpen(false)}
         />
       )}
@@ -847,6 +782,129 @@ const GoalCard = ({
   );
 };
 
+const DrawDeck = ({ count = 0 }) => {
+  const backSrc = imageMap["card-back"];
+  return (
+    <div className="table-discard-pile draw-deck" aria-label="Draw deck">
+      <div className="table-discard-stack">
+        <span className="discard-card-layer discard-layer-one" />
+        <span className="discard-card-layer discard-layer-two" />
+        <span className="discard-card-layer discard-layer-three draw-deck-face">
+          {backSrc ? <img src={backSrc} alt="Card back" /> : <span className="empty-discard-face">Deck</span>}
+        </span>
+        <strong>{count}</strong>
+      </div>
+      <p className="eyebrow" style={{ marginTop: 8, color: "rgba(201,168,76,0.55)" }}>Draw Deck</p>
+    </div>
+  );
+};
+
+const TableDiscardPile = ({ cards = [], label = "Discard Pile", onOpen }) => {
+  const count = cards.length;
+  const topCard = cards[cards.length - 1] || null;
+  return (
+    <button className="table-discard-pile" type="button" onClick={onOpen} title={`View ${label}`}>
+      <div className="table-discard-stack">
+        <span className="discard-card-layer discard-layer-one" />
+        <span className="discard-card-layer discard-layer-two" />
+        <span className="discard-card-layer discard-layer-three">
+          {topCard ? <CardFace card={topCard} compact /> : <span className="empty-discard-face">Empty</span>}
+        </span>
+        <strong>{count}</strong>
+      </div>
+      <p className="eyebrow" style={{ marginTop: 8, color: "rgba(201,168,76,0.55)" }}>{label}</p>
+    </button>
+  );
+};
+
+const MyProgressPanel = ({ me, isCurrent }) => {
+  const score = me?.score || 0;
+  const pct = Math.min(100, (score / 10) * 100);
+  return (
+    <section className={`game-panel compact-panel my-progress-panel${isCurrent ? " my-progress-current" : ""}`}>
+      <div className="panel-heading small-heading">
+        <p className="eyebrow">Your Progress</p>
+        <div className="progress-name-row">
+          <PlayerAvatar player={me} />
+          <h2>{me.name}</h2>
+        </div>
+      </div>
+      <div className="progress-bar-track">
+        <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="progress-stats">
+        <span className="progress-score">{score} / 10 pts</span>
+        <span>{me.hand?.length || 0} in hand · {me.storage?.length || 0} stored</span>
+      </div>
+    </section>
+  );
+};
+
+const TablePlayerChip = ({ player, isCurrent, isMe = false }) => (
+  <div
+    className={`table-player-chip${isCurrent ? " table-chip-current" : ""}${isMe ? " table-chip-me" : ""}${!player.connected ? " table-chip-offline" : ""}`}
+  >
+    <PlayerAvatar player={player} />
+    <div className="table-chip-info">
+      <strong>{player.name}</strong>
+      <span>
+        {isMe ? "You · " : ""}
+        {player.handCount} hand · {player.storageCount} stored
+        {!player.connected ? " · offline" : ""}
+      </span>
+    </div>
+    <b className="table-chip-score">{player.score} / 10</b>
+    {isCurrent && <span className="table-chip-turn-dot" aria-label="Current turn" />}
+  </div>
+);
+
+const TableTopView = ({ players, me, currentPlayerName, meName, discardPile, deckCounts, onOpenCardDiscard, onOpenGoalDiscard }) => {
+  const opponents = players.filter((p) => p.name !== meName);
+  const colTemplate = `repeat(${Math.max(opponents.length, 1)}, 1fr)`;
+
+  return (
+    <div className="tabletop-view">
+      {/* Felt table surface */}
+      <div className="tabletop-surface">
+        {/* Opponent storage zones */}
+        <div className="tabletop-zones-row tabletop-opponent-zones" style={{ gridTemplateColumns: colTemplate }}>
+          {opponents.map((player) => (
+            <div
+              key={player.name}
+              className={`tabletop-player-zone tabletop-opponent-zone${player.name === currentPlayerName ? " tabletop-zone-current" : ""}`}
+            >
+              <TablePlayerChip player={player} isCurrent={player.name === currentPlayerName} />
+              <StorageCards cards={player.storage} compact />
+            </div>
+          ))}
+        </div>
+
+        {/* Table centre — draw deck + two discard piles */}
+        <div className="tabletop-center">
+          <TableDiscardPile
+            cards={discardPile?.goals || []}
+            label="Goal Discard"
+            onOpen={onOpenGoalDiscard}
+          />
+          <DrawDeck count={deckCounts?.playing ?? 0} />
+          <TableDiscardPile
+            cards={discardPile?.playing || []}
+            label="Card Discard"
+            onOpen={onOpenCardDiscard}
+          />
+        </div>
+
+        {/* My storage zone */}
+        <div className={`tabletop-player-zone tabletop-me-zone${me?.name === currentPlayerName ? " tabletop-zone-current" : ""}`}>
+          <p className="tabletop-zone-label">Your Storage</p>
+          <StorageCards cards={me?.storage || []} />
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
 const StorageCards = ({ cards = [], compact = false }) => {
   const groups = groupCardsByKey(cards);
 
@@ -868,7 +926,7 @@ const StorageCards = ({ cards = [], compact = false }) => {
   );
 };
 
-const SeatingOrder = ({ players = [], currentPlayerName, meName }) => {
+const SeatingOrder = ({ players = [], currentPlayerName, meName, showScore = true }) => {
   const radius = 40;
   const points = players.map((player, index) => {
     const angle = -90 + (360 / Math.max(players.length, 1)) * index;
@@ -912,7 +970,7 @@ const SeatingOrder = ({ players = [], currentPlayerName, meName }) => {
         >
           <PlayerAvatar player={player} />
           <strong>{player.name.slice(0, 10)}</strong>
-          <span>{player.score || 0}</span>
+          {showScore && <span>{player.score || 0}</span>}
         </div>
       ))}
       <div className="seat-center-label">{players.length > 2 ? "Turn flow" : "Seats"}</div>
@@ -1351,7 +1409,7 @@ const DiscardPileStack = ({ playingCards = [], goalCards = [], onOpen }) => {
   );
 };
 
-const DiscardPileModal = ({ playingCards = [], goalCards = [], onClose }) => {
+const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard Pile", onClose }) => {
   const combined = [
     ...playingCards.map((card) => ({ ...card, pileLabel: "Playing discard" })),
     ...goalCards.map((card) => ({ ...card, pileLabel: "Goal discard" })),
@@ -1363,7 +1421,7 @@ const DiscardPileModal = ({ playingCards = [], goalCards = [], onClose }) => {
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Table memory</p>
-            <h2>Discard Pile</h2>
+            <h2>{title}</h2>
           </div>
           <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
         </div>

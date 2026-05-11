@@ -1,7 +1,11 @@
 .game-page {
-  min-height: 100vh;
+  height: 100vh;
   width: 100%;
   padding: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
   background:
     radial-gradient(circle at top, rgba(201, 168, 76, 0.08), transparent 35%),
     var(--bg);
@@ -102,9 +106,40 @@
 
 .table-layout {
   display: grid;
-  grid-template-columns: minmax(230px, 0.68fr) minmax(430px, 1.7fr) minmax(270px, 0.82fr);
+  grid-template-columns: 270px 1fr 290px;
   gap: 14px;
   align-items: start;
+  flex: 1;
+  min-height: 0;
+}
+
+.game-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tabletop-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.compact-hand-strip .card-strip {
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+}
+
+.compact-hand-strip .mp-card {
+  padding: 5px;
+}
+
+.compact-hand-strip .card-index {
+  display: none;
 }
 
 .game-panel {
@@ -129,6 +164,51 @@
   letter-spacing: 0.04em;
 }
 
+.my-progress-panel {
+  flex-shrink: 0;
+}
+
+.progress-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.my-progress-current {
+  border-color: rgba(201, 168, 76, 0.42);
+  box-shadow: 0 0 18px rgba(201, 168, 76, 0.16);
+}
+
+.progress-bar-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  margin: 10px 0 6px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 100%);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.progress-score {
+  color: var(--gold-light);
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+}
+
 .split-heading {
   display: flex;
   align-items: flex-start;
@@ -136,17 +216,7 @@
   gap: 10px;
 }
 
-.player-panel,
-.side-stack {
-  position: sticky;
-  top: 14px;
-}
-
-.side-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+/* legacy — replaced by .game-sidebar */
 
 .player-score-list {
   display: grid;
@@ -358,12 +428,25 @@ button:disabled {
   opacity: 0.42;
 }
 
+.hand-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.hand-action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .hand-sort-note {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 5px;
-  max-width: 250px;
 }
 
 .hand-sort-note span {
@@ -603,9 +686,14 @@ button:disabled {
   font-size: 0.86rem;
 }
 
-.public-storage-panel,
-.log-panel {
+.public-storage-panel {
   min-height: 160px;
+}
+
+.log-panel {
+  height: 260px;
+  display: flex;
+  flex-direction: column;
 }
 
 .opponent-storage-grid {
@@ -639,8 +727,8 @@ button:disabled {
 }
 
 .log-list {
-  max-height: 250px;
-  overflow: auto;
+  flex: 1;
+  overflow-y: auto;
   padding-right: 6px;
   text-align: left;
 }
@@ -942,17 +1030,19 @@ button:disabled {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1280px) {
+  .table-layout {
+    grid-template-columns: 240px 1fr 260px;
+  }
+}
+
+@media (max-width: 1060px) {
   .table-layout {
     grid-template-columns: 1fr;
   }
 
-  .player-panel,
-  .side-stack {
+  .game-sidebar {
     position: static;
-  }
-
-  .side-stack {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
@@ -990,7 +1080,7 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .side-stack,
+  .game-sidebar,
   .investor-columns,
   .inspect-card-modal {
     grid-template-columns: 1fr;
@@ -1721,5 +1811,288 @@ button:disabled {
   .magic-hand-confirm-row {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+/* ─── Tabletop view ──────────────────────────────────────────────────────────── */
+
+.tabletop-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.tabletop-seats-row {
+  display: grid;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+  padding: 0 4px;
+}
+
+.tabletop-top-seats {
+  align-items: end;
+  padding-bottom: 0;
+  margin-bottom: -1px;
+}
+
+.tabletop-bottom-seats {
+  align-items: start;
+  justify-items: center;
+  margin-top: -1px;
+}
+
+.tabletop-surface {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(8, 28, 16, 0.97), rgba(3, 10, 6, 0.99));
+  border: 2px solid rgba(201, 168, 76, 0.3);
+  border-radius: 28px;
+  box-shadow:
+    0 0 0 1px rgba(201, 168, 76, 0.07),
+    0 20px 60px rgba(0, 0, 0, 0.55),
+    inset 0 0 80px rgba(0, 0, 0, 0.4);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* subtle felt grain overlay */
+.tabletop-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.5' fill='rgba(255,255,255,0.025)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.tabletop-zones-row {
+  display: grid;
+  gap: 10px;
+}
+
+.tabletop-opponent-zones {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.14);
+}
+
+.tabletop-player-zone {
+  padding: 8px 10px;
+  border-radius: 13px;
+  min-height: 72px;
+  border: 1px solid transparent;
+  transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.tabletop-opponent-zone {
+  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.tabletop-me-zone {
+  border-color: rgba(76, 175, 116, 0.18);
+  background: rgba(76, 175, 116, 0.04);
+}
+
+.tabletop-zone-current {
+  border-color: rgba(201, 168, 76, 0.38) !important;
+  background: rgba(201, 168, 76, 0.08) !important;
+  box-shadow: inset 0 0 24px rgba(201, 168, 76, 0.06);
+}
+
+.tabletop-zone-label {
+  margin: 0 0 7px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(201, 168, 76, 0.42);
+}
+
+.tabletop-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  min-height: 110px;
+}
+
+/* ─── Compact discard pile on the table surface ──────────────────────────── */
+
+.table-discard-pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.table-discard-pile:hover {
+  opacity: 1;
+  transform: translateY(-3px);
+}
+
+.draw-deck {
+  cursor: default;
+}
+
+.draw-deck:hover {
+  opacity: 0.85;
+  transform: none;
+}
+
+.draw-deck-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.table-discard-stack {
+  position: relative;
+  width: 58px;
+  height: 78px;
+  isolation: isolate;
+}
+
+.table-discard-stack .discard-card-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 9px;
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  background: linear-gradient(135deg, rgba(201, 168, 76, 0.22), rgba(8, 10, 15, 0.92));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.table-discard-stack > strong {
+  position: absolute;
+  right: -10px;
+  bottom: -8px;
+  z-index: 5;
+  min-width: 22px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--gold-light);
+  color: #080a0f;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 900;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+  text-align: center;
+}
+
+/* ─── Player chips (match player-row card style) ─────────────────────────── */
+
+.table-player-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.table-chip-current {
+  border-color: rgba(201, 168, 76, 0.42);
+  box-shadow: 0 0 18px rgba(201, 168, 76, 0.16);
+}
+
+.table-chip-me {
+  background: rgba(76, 175, 116, 0.08);
+  border-color: rgba(76, 175, 116, 0.24);
+}
+
+.table-chip-offline {
+  opacity: 0.46;
+}
+
+.table-chip-info {
+  text-align: left;
+  min-width: 0;
+  flex: 1;
+}
+
+.table-chip-info strong {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-chip-info span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.table-chip-score {
+  color: var(--gold-light);
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.table-chip-turn-dot {
+  display: block;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold-light);
+  box-shadow: 0 0 8px rgba(201, 168, 76, 0.85);
+  animation: turnDotPulse 1.3s ease-in-out infinite;
+}
+
+@keyframes turnDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.8); }
+}
+
+/* ─── Sidebar fill panels ────────────────────────────────────────────────── */
+
+.sidebar-fill-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sidebar-fill-panel .goals-grid {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+@media (max-width: 760px) {
+  .tabletop-surface {
+    border-radius: 20px;
+    padding: 12px;
+  }
+
+  .table-chip-info strong {
+    max-width: 110px;
   }
 }
