@@ -1,510 +1,1449 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Fab, Modal, Typography, useMediaQuery } from "@mui/material";
-import ListIcon from "@mui/icons-material/List";
-import { Players } from "../components/Players";
-import {
-  ActionButtons,
-  ChooseDeclarations,
-  ChooseExecutions,
-  LogModal,
-  TargetMenu,
-  WinningModal,
-  SpectatorsPanel,
-} from "../components/GameComponents";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import "../styles/game.css";
-import "../styles/common.css";
-import "../styles/spectators.css";
-import { useLocation } from "react-router-dom";
 
-export const Game = ({ socket, name, room }) => {
-  const [turnCount, setTurnCount] = useState(0);
-  const [players, setPlayers] = useState([]);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [turnLogs, setTurnLogs] = useState([]);
-  const [winner, setWinner] = useState("");
-  const [end, setEnd] = useState(false);
-  const [pendingAttackType, setPendingAttackType] = useState(null);
-  const [declaredActions, setDeclaredActions] = useState([]);
-  const [confirmed, setConfirmed] = useState(false);
-  const [actionsError, setActionsError] = useState(false);
-  const [stage, setStage] = useState("declaration");
-  const [totalDeclarations, setTotalDeclarations] = useState([]);
-  const [selectedExecutions, setSelectedExecutions] = useState([]);
-  const [playerAnimationQueues, setPlayerAnimationQueues] = useState({});
-  const [activeAnimations, setActiveAnimations] = useState({});
-  const [openLog, setOpenLog] = useState(false);
-  const [defenceWarning, setDefenceWarning] = useState(false);
-  const [defenceError, setDefenceError] = useState(false);
-  const [bluffWarning, setBluffWarning] = useState(false);
-  const [fewActionsWarning, setFewActionsWarning] = useState(false);
-  const [spectators, setSpectators] = useState([]);
-  
-  const location = useLocation();
-  const isSpectator = location.state?.spectator || false;
+const playingCardImages = import.meta.glob("/src/assets/cards/*.{png,jpg,jpeg,webp}", {
+  eager: true,
+  import: "default",
+});
 
-  const isMobile = useMediaQuery('(max-width:600px)');
-  const open = Boolean(anchorEl);
+const goalCardImages = import.meta.glob("/src/assets/goal-cards/*.{png,jpg,jpeg,webp}", {
+  eager: true,
+  import: "default",
+});
+
+const imageMap = Object.entries({ ...playingCardImages, ...goalCardImages }).reduce(
+  (acc, [path, src]) => {
+    const key = path
+      .split("/")
+      .pop()
+      .replace(/\.[^/.]+$/, "");
+    acc[key] = src;
+    return acc;
+  },
+  {}
+);
+
+const STANDARD_RESOURCE_ORDER = ["workforce", "candy", "money", "wood", "land", "steel"];
+const SPECIAL_RESOURCE_ORDER = ["gold", "diamond"];
+const CANCEL_REACTION_KEYS = ["iThinkNot", "absolutelyNot"];
+const TRADE_TOOL_KEYS = ["itsAScam", "bindingContract"];
+const TARGETED_ACTION_KEYS = ["theft", "robbery", "goalRemoval", "goalSwap", "oraclesPower"];
+
+const AVATAR_COLORS = [
+  "#7c3aed",
+  "#2563eb",
+  "#0891b2",
+  "#059669",
+  "#65a30d",
+  "#ca8a04",
+  "#ea580c",
+  "#dc2626",
+  "#db2777",
+  "#9333ea",
+  "#0f766e",
+  "#b45309",
+];
+
+const getInitial = (player = {}) =>
+  (player.avatarInitial || player.name || "?").trim().slice(0, 1).toUpperCase() || "?";
+
+const fallbackAvatarColor = (name = "Player") => {
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) {
+    hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
+  }
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+};
+
+const getAvatarStyle = (player = {}) => ({
+  background: player.avatarColor || fallbackAvatarColor(player.name || "Player"),
+});
+
+const summarizeGoal = (goal) => {
+  const text = goal?.description || "Complete this goal automatically when its condition is met.";
+  if (goal?.key === "investor") return "Invest 2+ stored Money into another player.";
+  return text.length > 86 ? `${text.slice(0, 83).trim()}...` : text;
+};
+
+const titleCase = (value = "") =>
+  value
+    .replace(/([A-Z])/g, " $1")
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const getCardImage = (card) => imageMap[card?.key] || imageMap[card?.name] || null;
+
+const getSortRank = (card) => {
+  if (card?.type === "resource") {
+    if (SPECIAL_RESOURCE_ORDER.includes(card.key)) return 1;
+    return 0;
+  }
+  return 2;
+};
+
+const getResourceOrder = (card) => {
+  const standardIndex = STANDARD_RESOURCE_ORDER.indexOf(card?.key);
+  if (standardIndex >= 0) return standardIndex;
+  const specialIndex = SPECIAL_RESOURCE_ORDER.indexOf(card?.key);
+  if (specialIndex >= 0) return 100 + specialIndex;
+  return 999;
+};
+
+const sortCards = (a, b) => {
+  const rankDiff = getSortRank(a) - getSortRank(b);
+  if (rankDiff !== 0) return rankDiff;
+
+  if (a?.type === "resource" && b?.type === "resource") {
+    const resourceDiff = getResourceOrder(a) - getResourceOrder(b);
+    if (resourceDiff !== 0) return resourceDiff;
+  }
+
+  return (a?.name || "").localeCompare(b?.name || "");
+};
+
+const groupCardsByKey = (cards = []) => {
+  const groups = new Map();
+  cards.forEach((card) => {
+    if (!groups.has(card.key)) groups.set(card.key, []);
+    groups.get(card.key).push(card);
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({ card: group[0], cards: group, count: group.length }))
+    .sort((a, b) => sortCards(a.card, b.card));
+};
+
+const formatCountdown = (targetTime, now) => {
+  if (!targetTime) return "0.0s";
+  return `${Math.max(0, (targetTime - now) / 1000).toFixed(1)}s`;
+};
+
+export const Game = ({ socket, name, room, setRoom }) => {
+  const { roomCode } = useParams();
   const navigate = useNavigate();
-  const you = players.find((p) => p.name === name);
-  const isEliminated = you?.hp === 0;
-
-  const powerUps = ["special", "cruelty", "prowess", "heal"];
-
-  const queueAnimation = (playerName, animationType) => {
-    setPlayerAnimationQueues((prev) => {
-      const existing = prev[playerName] || [];
-      return {
-        ...prev,
-        [playerName]: [...existing, animationType],
-      };
-    });
-  };
-
-  useEffect(() => {
-    Object.entries(playerAnimationQueues).forEach(([player, queue]) => {
-      if (queue.length === 0 || activeAnimations[player]) return;
-
-      const [nextAnimation, ...rest] = queue;
-
-      setActiveAnimations((prev) => ({
-        ...prev,
-        [player]: nextAnimation,
-      }));
-
-      setPlayerAnimationQueues((prev) => ({
-        ...prev,
-        [player]: rest,
-      }));
-
-      setTimeout(() => {
-        setActiveAnimations((prev) => {
-          const updated = { ...prev };
-          delete updated[player];
-          return updated;
-        });
-      }, 1000);
-    });
-  }, [playerAnimationQueues, activeAnimations]);
+  const previousStateRef = useRef(null);
+  const newCardTimerRef = useRef(null);
+  const noticeTimerRef = useRef(null);
+  const [gameState, setGameState] = useState(null);
+  const [error, setError] = useState("");
+  const [noticeToast, setNoticeToast] = useState(null);
+  const [newCardIds, setNewCardIds] = useState(new Set());
+  const [turnPulse, setTurnPulse] = useState(0);
+  const [discardPileOpen, setDiscardPileOpen] = useState(false);
+  const [dismissedRevealIds, setDismissedRevealIds] = useState(new Set());
+  const [investorGoal, setInvestorGoal] = useState(null);
+  const [actionModalCard, setActionModalCard] = useState(null);
+  const [tradeBuilderOpen, setTradeBuilderOpen] = useState(false);
+  const [tradeResponseOpen, setTradeResponseOpen] = useState(false);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (!socket || !room || !name) {
+    if (!socket) return;
+    if (!name) {
       navigate("/");
       return;
     }
 
-    const handleStageChange = (newStage) => {
-      setConfirmed(false);
-      setStage(newStage);
-      setSelectedExecutions([]);
-    };
+    if (!room) setRoom(roomCode);
 
-    const handleNextTurn = ({ turnCount }) => {
-      setTurnCount(turnCount);
-      setDeclaredActions([]);
-      setSelectedExecutions([]);
-      setConfirmed(false);
-    };
-
-    const handleDeclarations = (declarations) => {
-      setTotalDeclarations(Object.entries(declarations));
-    };
-
-    const handleRejoin = (gameState) => {
-      setTurnCount(gameState.turnCount);
-    };
-
-    const handlePlayerEliminated = (name) => {
-      console.log(`${name} was eliminated`);
-    };
-
-    const handleGameOver = ({ type, winner }) => {
-      if (type === "win") {
-        setTurnLogs((prev) => [...prev, `🏆 ${winner} wins the game!`]);
-        setWinner(winner);
-        setEnd(true);
-      } else if (type === "draw") {
-        setTurnLogs((prev) => [...prev, `🤝 It's a draw! No players remain.`]);
-        setWinner(null);
+    const handleGameState = (state) => {
+      setGameState(state);
+      if (!state.activeTrade) {
+        setTradeResponseOpen(false);
       }
     };
 
-    const handlePowerUp = (name, power) => {
-      setPlayers((prevPlayers) =>
-        prevPlayers.map((p) => {
-          if (p.name === name) {
-            const updatedPowerUps = {
-              ...p.powerUps,
-              [power]: (p.powerUps?.[power] || 0) + 1,
-            };
-            return { ...p, powerUps: updatedPowerUps };
-          }
-          return p;
-        })
-      );
+    const handleResumeSuccess = ({ started }) => {
+      if (!started) navigate(`/lobby/${roomCode}`);
     };
 
-    const updatePlayers = (playersList, spectators) => {
-      setPlayers(playersList.map((p) => ({
-        ...p,
-        powerUps: p.powerUps ?? {},
-      })));
-      setSpectators(spectators ?? []);
+    const handleRoomNotFound = () => navigate("/");
+    const handleNotInRoom = () => navigate("/");
+    const handleGameError = (message) => {
+      setError(message);
+      window.setTimeout(() => setError(""), 3500);
     };
 
-    const handleTurnLog = (message) => {
-      setTurnLogs((prevLogs) => [...prevLogs, message]);
-    };
-
-    socket.on("power-up-received", handlePowerUp);
-    socket.on("next-turn", handleNextTurn);
-    socket.on("rejoin-game", handleRejoin);
-    socket.on("players-update", updatePlayers);
-    socket.on("turn-log", handleTurnLog);
-    socket.on("stage-update", handleStageChange);
-    socket.on("all-declared", handleDeclarations);
-    socket.on("player-eliminated", handlePlayerEliminated);
-    socket.on("game-over", handleGameOver);
-
-    socket.on("attack-occurred", (user) => queueAnimation(user, "attack"));
-    socket.on("special-occurred", (user) => queueAnimation(user, "special"));
-    socket.on("block-occurred", (blocker) => queueAnimation(blocker, "defend"));
-    socket.on("shield-occurred", (blocker) => queueAnimation(blocker, "shield"));
-    socket.on("prowess-occurred", (user) => queueAnimation(user, "prowess"));
-    socket.on("cruelty-occurred", (user) => queueAnimation(user, "cruelty"));
-    socket.on("heal-occurred", (user) => queueAnimation(user, "heal"));
-
-    socket.emit("get-current-turn", room, name);
-    socket.emit("get-players", room);
+    socket.emit("resume-game", roomCode, name);
+    socket.on("game-state", handleGameState);
+    socket.on("resume-success", handleResumeSuccess);
+    socket.on("room-not-found", handleRoomNotFound);
+    socket.on("not-in-room-error", handleNotInRoom);
+    socket.on("game-error", handleGameError);
 
     return () => {
-      socket.off("power-up-received", handlePowerUp);
-      socket.off("next-turn", handleNextTurn);
-      socket.off("rejoin-game", handleRejoin);
-      socket.off("players-update", updatePlayers);
-      socket.off("turn-log", handleTurnLog);
-      socket.off("stage-update", handleStageChange);
-      socket.off("all-declared", handleDeclarations);
-      socket.off("player-eliminated", handlePlayerEliminated);
-      socket.off("game-over", handleGameOver);
-      socket.off("attack-occurred");
-      socket.off("special-occurred");
-      socket.off("block-occurred");
-      socket.off("shield-occurred");
-      socket.off("prowess-occurred");
-      socket.off("cruelty-occurred");
-      socket.off("heal-occurred");
+      socket.off("game-state", handleGameState);
+      socket.off("resume-success", handleResumeSuccess);
+      socket.off("room-not-found", handleRoomNotFound);
+      socket.off("not-in-room-error", handleNotInRoom);
+      socket.off("game-error", handleGameError);
     };
-  }, [socket, room, name, navigate]);
+  }, [socket, name, room, roomCode, navigate, setRoom]);
 
-  const getRemainingPowerUps = (player, declared) => {
-    const usage = {};
-    declared.forEach((a) => {
-      if (powerUps.includes(a.actionType)) {
-        usage[a.actionType] = (usage[a.actionType] || 0) + 1;
+  useEffect(() => {
+    if (!gameState?.me) return;
+
+    const previous = previousStateRef.current;
+    if (previous?.me) {
+      const previousHandIds = new Set(previous.me.hand.map((card) => card.id));
+      const addedIds = gameState.me.hand
+        .filter((card) => !previousHandIds.has(card.id))
+        .map((card) => card.id);
+
+      if (addedIds.length > 0) {
+        window.clearTimeout(newCardTimerRef.current);
+        setNewCardIds(new Set(addedIds));
+        newCardTimerRef.current = window.setTimeout(() => setNewCardIds(new Set()), 1800);
       }
-    });
-    const remaining = {};
-    powerUps.forEach((type) => {
-      const owned = player.powerUps?.[type] || 0;
-      remaining[type] = owned - (usage[type] || 0);
-    });
-    return remaining;
-  };
 
-  const declareAction = () => {
-    if (declaredActions.length > 3) return;
-    setActionsError(false);
-    socket.emit("declare-action", room, name, declaredActions);
-    setConfirmed(true);
-    setDefenceWarning(false);
-  };
-
-  const closeTargetMenu = (targetName) => {
-    setAnchorEl(null);
-    if (!targetName) return;
-
-    const player = players.find((p) => p.name === name);
-    const remaining = getRemainingPowerUps(player, declaredActions);
-    const isBluff = powerUps.includes(pendingAttackType) && remaining[pendingAttackType] <= 0;
-
-    const newAction = {
-      index: declaredActions.length,
-      actionType: pendingAttackType,
-      target: targetName,
-      bluff: isBluff,
-    };
-
-    const updatedDeclared = [...declaredActions, newAction];
-    setDeclaredActions(updatedDeclared);
-
-    const hasBluff = updatedDeclared.some(
-      (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] <= 0
-    );
-    setBluffWarning(hasBluff);
-
-    if (powerUps.includes(pendingAttackType)) {
-      player.powerUps[pendingAttackType] -= 1;
+      if (previous.currentPlayerName !== gameState.currentPlayerName) {
+        setTurnPulse((value) => value + 1);
+      }
     }
 
-    setPendingAttackType(null);
-  };
+    previousStateRef.current = gameState;
+  }, [gameState]);
 
-  const deleteAction = (index) => {
-    if (confirmed) return;
-
-    setActionsError(false);
-
-    const updatedDeclared = declaredActions.filter((_, i) => i !== index);
-    setDeclaredActions(updatedDeclared);
-
-    const player = players.find((p) => p.name === name);
-    const actionType = declaredActions[index].actionType;
-
-    if (powerUps.includes(actionType)) {
-      player.powerUps[actionType] += 1;
-    }
-
-    const hasDefend = updatedDeclared.some((a) => a.actionType === "defend");
-    const hasShield = updatedDeclared.some((a) => a.actionType === "energy-shield");
-    setDefenceWarning(hasDefend && hasShield);
-    setDefenceError(hasDefend && hasShield);
-
-    const hasBluff = updatedDeclared.some(
-      (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] === 0
-    );
-    setBluffWarning(hasBluff);
-  };
-
-  const selectAction = (event, actionType) => {
-    setDefenceWarning(false);
-    setActionsError(false);
-
-    if (declaredActions.length === 3) {
-      setActionsError(true);
+  useEffect(() => {
+    if (!gameState?.notice?.id) {
+      setNoticeToast(null);
       return;
     }
+    setNoticeToast(gameState.notice);
+    window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => setNoticeToast(null), 3200);
+  }, [gameState?.notice?.id, gameState?.notice]);
 
-    const selfTargeted = ["defend", "heal", "energy-shield"];
-    const player = players.find((p) => p.name === name);
+  useEffect(() => {
+    if (!gameState?.pendingAction && gameState?.activeTrade?.state !== "scamWindow") return undefined;
+    const interval = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(interval);
+  }, [gameState?.pendingAction, gameState?.activeTrade?.state]);
 
-    if (selfTargeted.includes(actionType)) {
-      const remaining = getRemainingPowerUps(player, declaredActions);
-      const isBluff = powerUps.includes(actionType) && remaining[actionType] <= 0;
+  useEffect(
+    () => () => {
+      window.clearTimeout(newCardTimerRef.current);
+      window.clearTimeout(noticeTimerRef.current);
+    },
+    []
+  );
 
-      const newDeclaredActions = [
-        ...declaredActions,
-        { index: declaredActions.length, actionType, target: name, bluff: isBluff },
-      ];
+  const me = gameState?.me;
+  const opponents = useMemo(
+    () => gameState?.players?.filter((player) => player.name !== name) || [],
+    [gameState, name]
+  );
 
-      setDeclaredActions(newDeclaredActions);
+  const currentPlayer = gameState?.players?.find(
+    (player) => player.name === gameState.currentPlayerName
+  );
+  const defaultTargetName = opponents[0]?.name || "";
+  const currentTurnPlayer = gameState?.players?.find((player) => player.name === gameState.currentPlayerName);
+  const oracleReveal = me?.privateReveal && !dismissedRevealIds.has(me.privateReveal.id) ? me.privateReveal : null;
+  const magicHandChoice = me?.pendingChoice?.type === "magicHandDiscard" ? me.pendingChoice : null;
 
-      const hasDefend = newDeclaredActions.some((a) => a.actionType === "defend");
-      const hasShield = newDeclaredActions.some((a) => a.actionType === "energy-shield");
-      setDefenceWarning(hasDefend && hasShield);
+  const sortedHand = useMemo(
+    () =>
+      (me?.hand || [])
+        .map((card, originalIndex) => ({ ...card, originalIndex }))
+        .sort(sortCards),
+    [me?.hand]
+  );
 
-      const hasBluff = newDeclaredActions.some(
-        (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] === 0
-      );
-      setBluffWarning(hasBluff);
+  const tableLocked = Boolean(gameState?.pendingAction || gameState?.activeTrade || gameState?.pendingChoice || me?.pendingChoice);
 
-      if (powerUps.includes(actionType)) {
-        player.powerUps[actionType] -= 1;
-      }
-    } else {
-      const otherPlayer = players.find((p) => p.name !== name);
-
-      if (players.length === 2 && otherPlayer) {
-        const remaining = getRemainingPowerUps(player, declaredActions);
-        const isBluff = powerUps.includes(actionType) && remaining[actionType] <= 0;
-
-        const newDeclaredActions = [
-          ...declaredActions,
-          { index: declaredActions.length, actionType, target: otherPlayer.name, bluff: isBluff },
-        ];
-
-        setDeclaredActions(newDeclaredActions);
-
-        const hasBluff = newDeclaredActions.some(
-          (a) => powerUps.includes(a.actionType) && player.powerUps?.[a.actionType] === 0
-        );
-        setBluffWarning(hasBluff);
-
-        if (powerUps.includes(actionType)) {
-          player.powerUps[actionType] -= 1;
-        }
-      } else {
-        // Open the target menu as usual
-        setPendingAttackType(actionType);
-        setAnchorEl(event.currentTarget);
-      }
-    }
+  const playCard = (card, extraPayload = {}) => {
+    socket.emit("play-card", roomCode, { cardIndex: card.originalIndex, ...extraPayload });
   };
 
-  const leaveGame = () => {
-    socket.emit("leave-room", room, name);
+  const beginPlayCard = (card) => {
+    const needsModal = TARGETED_ACTION_KEYS.includes(card.key) || card.needsTarget;
+    if (needsModal && card.type === "action" && !CANCEL_REACTION_KEYS.includes(card.key)) {
+      setActionModalCard(card);
+      return;
+    }
+    playCard(card, {});
+  };
+
+  const discardCard = (card) =>
+    socket.emit("discard-card", roomCode, { cardIndex: card.originalIndex });
+
+  const rerollGoal = (goalIndex) => socket.emit("reroll-goal", roomCode, { goalIndex });
+
+  const completeInvestor = ({ goalIndex, targetName: investorTargetName, moneyCardIds }) => {
+    socket.emit("complete-investor", roomCode, {
+      goalIndex,
+      targetName: investorTargetName,
+      moneyCardIds,
+    });
+    setInvestorGoal(null);
+  };
+
+  const createTrade = (payload) => {
+    socket.emit("create-trade", roomCode, payload);
+    setTradeBuilderOpen(false);
+  };
+
+  const respondTrade = (payload) => {
+    socket.emit("respond-trade", roomCode, payload);
+    setTradeResponseOpen(false);
+  };
+
+  const acceptTrade = () => socket.emit("accept-trade", roomCode);
+  const declineTrade = () => socket.emit("decline-trade", roomCode);
+  const playScam = () => socket.emit("play-scam", roomCode);
+  const chooseDiscardCard = (cardId) => socket.emit("choose-discard-card", roomCode, { cardId });
+  const endTurn = () => socket.emit("end-turn", roomCode);
+
+  const leaveTable = () => {
+    socket.emit("leave-room", roomCode, name);
     navigate("/");
   };
 
-  const executeAction = (index) => {
-    setDefenceError(false);
-    if (confirmed) return;
-
-    const newSelection = selectedExecutions.includes(index)
-      ? selectedExecutions.filter((i) => i !== index)
-      : selectedExecutions.length < 2
-        ? [...selectedExecutions, index]
-        : selectedExecutions;
-
-    const selected = newSelection.map((i) => declaredActions[i]);
-
-    const hasDefend = selected.some((a) => a.actionType === "defend");
-    const hasShield = selected.some((a) => a.actionType === "energy-shield");
-
-    setDefenceError(hasDefend && hasShield);
-    setActionsError(false);
-    setSelectedExecutions(newSelection);
-  };
-
-  const confirmExecution = () => {
-    if (defenceError) return;
-
-    const actionsToExecute = selectedExecutions.map((i) => declaredActions[i]);
-    if (actionsToExecute.length < 2) {
-      setFewActionsWarning(true);
-      return;
-    }
-    socket.emit("execute-actions", room, name, actionsToExecute);
-    setConfirmed(true);
-  };
-
-  const confirmAnyway = () => {
-    const actionsToExecute = selectedExecutions.map((i) => declaredActions[i]);
-    socket.emit("execute-actions", room, name, actionsToExecute);
-    setConfirmed(true);
-    setFewActionsWarning(false);
-  };
+  if (!socket || !gameState || !me) {
+    return (
+      <main className="game-page game-page-centered">
+        <section className="game-panel loading-panel">
+          <p className="eyebrow">Machiavellian Pursuits</p>
+          <h1>Finding your table...</h1>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <div className="center">
-      {isMobile ? (
-        <Fab size="medium" color="primary" sx={{ position: 'fixed', top: 20, left: 20 }} onClick={() => setOpenLog(true)}>
-          <ListIcon />
-        </Fab>
+    <main className="game-page">
+      <header className="game-header compact-header">
+        <div>
+          <p className="eyebrow">Room {roomCode}</p>
+          <h1>Machiavellian Pursuits</h1>
+        </div>
+        <div key={turnPulse} className="turn-card turn-card-attention current-turn-card">
+          {!gameState.winner && currentTurnPlayer && <PlayerAvatar player={currentTurnPlayer} size="large" />}
+          <div>
+            <span>Current turn</span>
+            <strong>{gameState.winner ? "Game Over" : gameState.currentPlayerName}</strong>
+          </div>
+        </div>
+      </header>
 
-      ) : (
-        <div className="corner-info">
-          <p style={{ fontSize: "12.5px" }}>Game Room: {room}</p>
-          <div className="game-info">
-            <strong>Turn: {turnCount}</strong>
-            <strong>You: {name} {isSpectator && "(Spectator)"}</strong>
-            <strong>Stage: {stage}</strong>
-          </div>
-          <div className="turn-log">
-            {turnLogs.map((log, index) => (
-              <div key={index}>{log}</div>
-            ))}
-          </div>
-          {winner !== "" && (
-            <p>
-              {winner ? <h4>Result: {winner} wins</h4> : <h4>Result: Draw</h4>}
-            </p>
-          )}
+      {turnPulse > 0 && !gameState.winner && (
+        <div key={`turn-splash-${turnPulse}`} className="turn-splash">
+          <span>Turn changed</span>
+          <strong>{gameState.currentPlayerName}</strong>
         </div>
       )}
 
-      <div className={`center ${!isMobile ? "gameplay" : ""}`}>
-        <Players
-          players={players}
-          you={name}
-          totalDeclarations={totalDeclarations}
-          stage={stage}
-          blockAnimations={activeAnimations}
-        />
+      {gameState.winner && (
+        <section className="winner-banner compact-winner-banner">
+          <p className="eyebrow">Victory</p>
+          <h2>{gameState.winner} wins the pursuit.</h2>
+          <button onClick={() => navigate("/")}>Return Home</button>
+        </section>
+      )}
 
-        {isSpectator ? (
-          <div>👁️ You are spectating this match and cannot interact with it.</div>
-        ) : !isEliminated ? (
-          stage === "declaration" ? (
-            <ChooseDeclarations
-              {...{
-                confirmed,
-                declaredActions,
-                declareAction,
-                deleteAction,
-                name,
-              }}
-            />
-          ) : (
-            <ChooseExecutions
-              {...{
-                confirmed,
-                declaredActions,
-                selectedExecutions,
-                confirmExecution,
-                executeAction,
-              }}
-            />
-          )
-        ) : null}
+      {error && <div className="game-toast danger-toast">{error}</div>}
+      {noticeToast && <div className={`game-toast notice-toast ${noticeToast.type || "info"}`}>{noticeToast.text}</div>}
 
-        {actionsError && <Typography color="error" sx={{ mb: 1 }}>Please declare exactly 3 actions!</Typography>}
-
-        {isEliminated ? (
-          <p style={{ color: "red", marginBottom: "10px" }}>You have been eliminated and cannot take actions.</p>
-        ) : (
-          !isSpectator && stage === "declaration" && <ActionButtons {...{ you, selectAction }} />
-        )}
-
-        {defenceWarning && (
-          <p className="warning">
-            You have declared both Defend and Energy Shield. Are you sure?
-            <br />
-            You can only execute one of these.
-          </p>
-        )}
-
-        {bluffWarning && (
-          <p className="warning">
-            One or more actions you plan to declare are power-ups you do not have.
-            <br />
-            It will be a bluff. You will not be able to execute this action.
-          </p>
-        )}
-
-        {defenceError && (
-          <Typography color="error" sx={{ mb: 1 }}>
-            You cannot use Defend and Energy Shield in the same turn!
-          </Typography>
-        )}
-
-        <button className="menu-button red" onClick={leaveGame}>
-          Leave Game
-        </button>
-
-        <SpectatorsPanel spectators={spectators} />
-        <TargetMenu {...{ anchorEl, open, closeTargetMenu, players, name }} />
-        <WinningModal {...{ end, setEnd, winner }} />
-        <LogModal {...{ openLog, setOpenLog, room, name, turnLogs, turnCount, stage, winner, isSpectator }} />
-
-        <Modal open={fewActionsWarning} onClose={() => setFewActionsWarning(false)}>
-          <div className="modal center">
-            <h3>Execute Fewer Than 2 Actions?</h3>
+      <section className="table-layout compact-table-layout">
+        <aside className="game-panel player-panel compact-panel">
+          <div className="panel-heading split-heading small-heading">
             <div>
-              You've selected {selectedExecutions.length} action{selectedExecutions.length === 1 ? "" : "s"}.
+              <p className="eyebrow">Players</p>
+              <h2>Seating Order</h2>
             </div>
-            <div>Are you sure you want to proceed?</div>
-            <div className="horizontal-box" style={{ marginTop: "20px" }}>
-              <button className="menu-button" onClick={() => setFewActionsWarning(false)}>
-                Cancel
-              </button>
-              <button className="menu-button" onClick={confirmAnyway}>
-                Confirm
-              </button>
-            </div>
+            <span className="deck-pill">{gameState.players.length} seated</span>
           </div>
-        </Modal>
-      </div>
+
+          <SeatingOrder
+            players={gameState.players}
+            currentPlayerName={gameState.currentPlayerName}
+            meName={name}
+          />
+
+          <div className="player-score-list">
+            {gameState.players.map((player) => (
+              <div
+                className={`player-row compact-player-row ${player.name === name ? "you-row" : ""} ${
+                  player.name === gameState.currentPlayerName ? "current-player-row" : ""
+                }`}
+                key={player.name}
+              >
+                <div className="player-row-identity">
+                  <PlayerAvatar player={player} />
+                  <div>
+                    <strong>{player.name}</strong>
+                    <span>
+                    {player.name === name ? "You · " : ""}
+                    {player.handCount} hand · {player.storageCount} stored
+                    {!player.connected ? " · offline" : ""}
+                    </span>
+                  </div>
+                </div>
+                <b>{player.score} / 10</b>
+              </div>
+            ))}
+          </div>
+
+          <div className="deck-counts compact-deck-counts">
+            <span>Deck {gameState.deckCounts.playing}</span>
+            <span>Discard {gameState.deckCounts.playingDiscard}</span>
+            <span>Goals {gameState.deckCounts.goals}</span>
+          </div>
+        </aside>
+
+        <section className="main-table compact-main-table">
+          <section className="game-panel status-panel compact-panel compact-status-panel">
+            <div>
+              <p className="eyebrow">Status</p>
+              <h2>
+                {gameState.pendingAction
+                  ? "Reaction window"
+                  : gameState.pendingChoice || me.pendingChoice
+                    ? "Card choice pending"
+                    : gameState.activeTrade
+                      ? "Trade in progress"
+                      : me.isYourTurn
+                      ? me.mustDiscard
+                        ? "Discard down to 8"
+                        : "Your move"
+                      : `${currentPlayer?.name || "Someone"}'s turn`}
+              </h2>
+              <p>
+                {gameState.pendingAction
+                  ? "The action will resolve if nobody counters it in time."
+                  : gameState.pendingChoice || me.pendingChoice
+                    ? "Finish the open choice before taking other table actions."
+                    : gameState.activeTrade
+                      ? "Finish the trade flow before taking other table actions."
+                      : me.isYourTurn
+                      ? me.actionPlayed
+                        ? "Action used. You can still store resources, reroll, complete Investor, trade, or end your turn."
+                        : "Store resources, play one action, trade, reroll one goal, or complete Investor."
+                      : "Watch the table and plan your next lie."}
+              </p>
+            </div>
+
+            <div className="status-actions">
+              <button
+                className="ghost-button"
+                disabled={!me.canCreateTrade}
+                onClick={() => setTradeBuilderOpen(true)}
+              >
+                Trade
+              </button>
+              {!gameState.pendingAction && !gameState.pendingChoice && !me.pendingChoice && (
+                <button
+                  className="gold-button"
+                  disabled={!me.isYourTurn || me.mustDiscard || Boolean(gameState.winner) || tableLocked}
+                  onClick={endTurn}
+                >
+                  End Turn
+                </button>
+              )}
+            </div>
+          </section>
+
+          <DiscardPileStack
+            playingCards={gameState.discardPile?.playing || []}
+            goalCards={gameState.discardPile?.goals || []}
+            onOpen={() => setDiscardPileOpen(true)}
+          />
+
+          {gameState.pendingAction && (
+            <PendingActionPanel
+              pendingAction={gameState.pendingAction}
+              me={me}
+              now={now}
+              onReact={(card) => playCard(card)}
+              hand={sortedHand}
+            />
+          )}
+
+          {gameState.activeTrade && (
+            <ActiveTradePanel
+              trade={gameState.activeTrade}
+              name={name}
+              me={me}
+              now={now}
+              onRespond={() => setTradeResponseOpen(true)}
+              onAccept={acceptTrade}
+              onDecline={declineTrade}
+              onScam={playScam}
+            />
+          )}
+
+          <section className="game-panel hand-panel compact-panel">
+            <div className="panel-heading split-heading small-heading">
+              <div>
+                <p className="eyebrow">Your hand</p>
+                <h2>{me.hand.length} cards</h2>
+              </div>
+              <div className="hand-sort-note">
+                <span>Resources</span>
+                <span>Special</span>
+                <span>Actions</span>
+              </div>
+              {me.mustDiscard && <span className="danger-pill">Discard {me.hand.length - 8}</span>}
+            </div>
+
+            <div className="card-strip compact-card-strip">
+              {sortedHand.map((card, displayIndex) => (
+                <PlayingCard
+                  key={card.id || `${card.key}-${displayIndex}`}
+                  card={card}
+                  displayIndex={displayIndex}
+                  isNew={newCardIds.has(card.id)}
+                  disabled={Boolean(gameState.winner || gameState.pendingChoice || me.pendingChoice)}
+                  isYourTurn={me.isYourTurn}
+                  actionPlayed={me.actionPlayed}
+                  mustDiscard={me.mustDiscard}
+                  pendingAction={gameState.pendingAction}
+                  activeTrade={gameState.activeTrade || gameState.pendingChoice || me.pendingChoice}
+                  canReactToAction={me.canReactToAction}
+                  onPlay={() => beginPlayCard(card)}
+                  onDiscard={() => discardCard(card)}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="game-panel public-storage-panel compact-panel">
+            <div className="panel-heading small-heading">
+              <p className="eyebrow">Public board</p>
+              <h2>Storage Around the Table</h2>
+            </div>
+            <div className="opponent-storage-grid compact-storage-grid">
+              <div className="opponent-storage self-storage-card">
+                <strong>{me.name}</strong>
+                <StorageCards cards={me.storage} />
+              </div>
+              {opponents.map((player) => (
+                <div className="opponent-storage" key={player.name}>
+                  <strong>{player.name}</strong>
+                  <StorageCards cards={player.storage} compact />
+                </div>
+              ))}
+            </div>
+          </section>
+        </section>
+
+        <aside className="side-stack compact-side-stack">
+          <section className="game-panel goals-panel compact-panel compact-goals-panel">
+            <div className="panel-heading small-heading">
+              <p className="eyebrow">Private</p>
+              <h2>Your Goals</h2>
+            </div>
+
+            <div className="goals-grid compact-goals-grid">
+              {me.goals.map((goal, index) => (
+                <GoalCard
+                  key={goal.id || `${goal.key}-${index}`}
+                  goal={goal}
+                  index={index}
+                  disabled={Boolean(gameState.winner) || tableLocked}
+                  isYourTurn={me.isYourTurn}
+                  goalRerolled={me.goalRerolled}
+                  onReroll={() => rerollGoal(index)}
+                  onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="game-panel log-panel compact-panel compact-log-panel">
+            <div className="panel-heading small-heading">
+              <p className="eyebrow">History</p>
+              <h2>Table Log</h2>
+            </div>
+            <div className="log-list compact-log-list">
+              {gameState.log.map((entry, index) => (
+                <p key={`${entry}-${index}`}>{entry}</p>
+              ))}
+            </div>
+          </section>
+        </aside>
+      </section>
+
+      {actionModalCard && (
+        <ActionTargetModal
+          card={actionModalCard}
+          gameState={gameState}
+          me={me}
+          opponents={opponents}
+          defaultTargetName={defaultTargetName}
+          onClose={() => setActionModalCard(null)}
+          onConfirm={(payload) => {
+            playCard(actionModalCard, payload);
+            setActionModalCard(null);
+          }}
+         
+        />
+      )}
+
+      {tradeBuilderOpen && (
+        <TradeBuilderModal
+          hand={sortedHand}
+          opponents={opponents}
+          defaultTargetName={defaultTargetName}
+          onClose={() => setTradeBuilderOpen(false)}
+          onConfirm={createTrade}
+         
+        />
+      )}
+
+      {tradeResponseOpen && gameState.activeTrade && (
+        <TradeResponseModal
+          hand={sortedHand}
+          trade={gameState.activeTrade}
+          onClose={() => setTradeResponseOpen(false)}
+          onConfirm={respondTrade}
+         
+        />
+      )}
+
+      {investorGoal && (
+        <InvestorModal
+          goal={investorGoal.goal}
+          goalIndex={investorGoal.goalIndex}
+          storage={me.storage}
+          opponents={opponents}
+          defaultTargetName={defaultTargetName}
+          onClose={() => setInvestorGoal(null)}
+          onConfirm={completeInvestor}
+         
+        />
+      )}
+
+      {discardPileOpen && (
+        <DiscardPileModal
+          playingCards={gameState.discardPile?.playing || []}
+          goalCards={gameState.discardPile?.goals || []}
+          onClose={() => setDiscardPileOpen(false)}
+        />
+      )}
+
+      {magicHandChoice && (
+        <MagicHandChoiceModal choice={magicHandChoice} onConfirm={chooseDiscardCard} />
+      )}
+
+      {oracleReveal && (
+        <OracleRevealModal
+          reveal={oracleReveal}
+          onClose={() => setDismissedRevealIds((ids) => new Set([...ids, oracleReveal.id]))}
+        />
+      )}
+
+      <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
+    </main>
+  );
+};
+
+const CardFace = ({ card, className = "", compact = false }) => {
+  const image = getCardImage(card);
+
+  return (
+    <div className={`card-face-button ${compact ? "compact-face" : ""} ${className}`} aria-label={card?.name || "Card"}>
+      {image ? <img src={image} alt={card.name} /> : <div className="card-fallback">{card.name}</div>}
+      <span className="hover-card-details">
+        <strong>{card.name || titleCase(card.key)}</strong>
+        <small>{card.description || "No description available."}</small>
+      </span>
     </div>
   );
 };
+
+const PlayingCard = ({
+  card,
+  displayIndex,
+  isNew,
+  disabled,
+  isYourTurn,
+  actionPlayed,
+  mustDiscard,
+  pendingAction,
+  activeTrade,
+  canReactToAction,
+  onPlay,
+  onDiscard,
+}) => {
+  const isResource = card.type === "resource";
+  const isCancelReaction = CANCEL_REACTION_KEYS.includes(card.key);
+  const isTradeTool = TRADE_TOOL_KEYS.includes(card.key);
+  const tableLocked = Boolean(activeTrade || (pendingAction && !isCancelReaction));
+  const canPlayResource = isResource && isYourTurn && !mustDiscard && !tableLocked;
+  const canReact = isCancelReaction && canReactToAction && pendingAction;
+  const canPlayNormalAction =
+    !isResource &&
+    !isCancelReaction &&
+    !isTradeTool &&
+    !mustDiscard &&
+    !tableLocked &&
+    isYourTurn &&
+    !actionPlayed;
+  const showPlayButton = canPlayResource || canPlayNormalAction || canReact;
+
+  return (
+    <article
+      className={`mp-card compact-mp-card ${isResource ? "resource-card" : "action-card"} ${
+        card.specialResource ? "special-resource-card" : ""
+      } ${isNew ? "draw-new-card" : ""}`}
+    >
+      <CardFace card={card} />
+      <div className="card-actions compact-card-actions">
+        {mustDiscard ? (
+          <button className="danger-button" disabled={disabled || Boolean(activeTrade || pendingAction)} onClick={onDiscard}>
+            Discard
+          </button>
+        ) : showPlayButton ? (
+          <button
+            disabled={disabled || (!canPlayResource && !canPlayNormalAction && !canReact)}
+            onClick={onPlay}
+          >
+            {isResource ? "Store" : isCancelReaction ? "React" : "Play"}
+          </button>
+        ) : (
+          <span className="card-state-chip">
+            {isCancelReaction ? "Reaction only" : isTradeTool ? "Trade tool" : tableLocked ? "Waiting" : "Unavailable"}
+          </span>
+        )}
+      </div>
+      <span className="card-index">#{displayIndex + 1}</span>
+    </article>
+  );
+};
+
+const PendingActionPanel = ({ pendingAction, me, now, onReact, hand }) => {
+  const reactionCards = hand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
+  const isActor = pendingAction.actorName === me.name;
+  return (
+    <section className="game-panel pending-action-panel compact-panel">
+      <div className="pending-action-copy">
+        <p className="eyebrow">Reaction window</p>
+        <h2>{pendingAction.actorName} played {pendingAction.card.name}</h2>
+        <p>
+          Resolves in <strong>{formatCountdown(pendingAction.expiresAt, now)}</strong>
+          {pendingAction.targetName ? ` against ${pendingAction.targetName}` : ""}.
+        </p>
+      </div>
+      <CardFace card={pendingAction.card} compact />
+      <div className="pending-reaction-actions">
+        {isActor && <span className="card-state-chip">Your action is pending</span>}
+        {!isActor && reactionCards.length === 0 && <span className="card-state-chip">No counter card</span>}
+        {!isActor && reactionCards.map((card) => (
+          <button className="danger-button" key={card.id} onClick={() => onReact(card)} disabled={!me.canReactToAction}>
+            Play {card.name}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, onDecline, onScam }) => {
+  const isInitiator = trade.initiatorName === name;
+  const isResponder = trade.responderName === name;
+  const isParticipant = isInitiator || isResponder;
+  const canRespond = trade.state === "open" && !isInitiator && (!trade.targetName || trade.targetName === name);
+  const canAccept = trade.state === "configured" && isInitiator;
+  const canDecline = trade.state !== "scamWindow" && isParticipant;
+  const isScamWindow = trade.state === "scamWindow";
+
+  return (
+    <section className="game-panel active-trade-panel compact-panel">
+      <div className="trade-panel-header">
+        <div>
+          <p className="eyebrow">Trading</p>
+          <h2>
+            {trade.initiatorName} → {trade.targetName || "Everyone"}
+          </h2>
+          <p>
+            {trade.bindingUsed ? "Binding Contract active. No scams allowed." : "Unprotected trade. Scams may happen after acceptance."}
+          </p>
+        </div>
+        <span className={`trade-state-pill ${trade.state}`}>{titleCase(trade.state)}</span>
+      </div>
+
+      <div className="trade-offers-grid">
+        <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
+        <TradeOffer title={trade.responderName ? `${trade.responderName} offers` : "Waiting for response"} cards={trade.responderOffer} />
+      </div>
+
+      {isScamWindow && (
+        <div className="scam-window-row">
+          <span>Scam window closes in <strong>{formatCountdown(trade.scamEndsAt, now)}</strong></span>
+          <span>Scams played: {trade.scamsPlayed.length ? trade.scamsPlayed.join(", ") : "none"}</span>
+        </div>
+      )}
+
+      <div className="trade-panel-actions">
+        {canRespond && <button onClick={onRespond}>Respond to trade</button>}
+        {canAccept && <button className="gold-button" onClick={onAccept}>Accept trade</button>}
+        {canDecline && <button className="ghost-button" onClick={onDecline}>Cancel trade</button>}
+        {isScamWindow && isParticipant && (
+          <button className="danger-button" disabled={!me.canPlayScam} onClick={onScam}>
+            {me.canPlayScam ? "Play It's a Scam" : trade.scamsPlayed.includes(name) ? "Scam played" : "No scam available"}
+          </button>
+        )}
+        {!canRespond && !canAccept && !canDecline && !isScamWindow && <span className="card-state-chip">Waiting...</span>}
+      </div>
+    </section>
+  );
+};
+
+const TradeOffer = ({ title, cards = [] }) => (
+  <div className="trade-offer-box">
+    <strong>{title}</strong>
+    <div className="trade-card-row">
+      {cards.length === 0 ? (
+        <span className="empty-storage">Nothing</span>
+      ) : (
+        cards.map((card) => <CardFace key={card.id} card={card} compact />)
+      )}
+    </div>
+  </div>
+);
+
+const GoalCard = ({
+  goal,
+  index,
+  disabled,
+  isYourTurn,
+  goalRerolled,
+  onReroll,
+  onInvestor,
+}) => {
+  const isInvestor = goal.key === "investor";
+  const canOpenInvestor = isInvestor && isYourTurn && (goal.investorMoneyAvailable || 0) >= 2;
+
+  return (
+    <article className={`goal-card-box compact-goal-card ${isInvestor ? "investor-goal-card" : ""}`}>
+      <CardFace card={goal} compact />
+      <div className="goal-meta compact-goal-meta">
+        <strong>
+          {isInvestor ? "Variable" : `${goal.points || 1} pt${(goal.points || 1) === 1 ? "" : "s"}`}
+        </strong>
+        <p>{goal.name}</p>
+        <small className="goal-condition-summary">{summarizeGoal(goal)}</small>
+      </div>
+      <div className="goal-actions compact-goal-actions">
+        {isInvestor && (
+          <button disabled={disabled || !canOpenInvestor} onClick={onInvestor}>
+            Invest
+          </button>
+        )}
+        <button
+          className="ghost-button"
+          disabled={disabled || !isYourTurn || goalRerolled}
+          onClick={onReroll}
+        >
+          Reroll {index + 1}
+        </button>
+      </div>
+    </article>
+  );
+};
+
+const StorageCards = ({ cards = [], compact = false }) => {
+  const groups = groupCardsByKey(cards);
+
+  if (groups.length === 0) {
+    return <p className="empty-storage">No resources stored yet.</p>;
+  }
+
+  return (
+    <div className={`storage-card-grid ${compact ? "compact-storage-cards" : ""}`}>
+      {groups.map(({ card, count }) => (
+        <article className="storage-stack-card" key={card.key} title={`${card.name} × ${count}`}>
+          <div className="stack-shadow stack-shadow-one" />
+          {count > 1 && <div className="stack-shadow stack-shadow-two" />}
+          <CardFace card={card} compact />
+          <span className="storage-count-badge">×{count}</span>
+        </article>
+      ))}
+    </div>
+  );
+};
+
+const SeatingOrder = ({ players = [], currentPlayerName, meName }) => {
+  const radius = 40;
+  const points = players.map((player, index) => {
+    const angle = -90 + (360 / Math.max(players.length, 1)) * index;
+    const radians = (Math.PI / 180) * angle;
+    return {
+      player,
+      x: 50 + radius * Math.cos(radians),
+      y: 50 + radius * Math.sin(radians),
+    };
+  });
+
+  return (
+    <div className="seating-widget" aria-label="Seating order">
+      <svg className="seat-arrows" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <marker id="seat-arrow-head" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" />
+          </marker>
+        </defs>
+        {points.length > 2 &&
+          points.map((point, index) => {
+            const next = points[(index + 1) % points.length];
+            const dx = next.x - point.x;
+            const dy = next.y - point.y;
+            const length = Math.hypot(dx, dy) || 1;
+            const trim = 11;
+            const x1 = point.x + (dx / length) * trim;
+            const y1 = point.y + (dy / length) * trim;
+            const x2 = next.x - (dx / length) * trim;
+            const y2 = next.y - (dy / length) * trim;
+            return <line key={point.player.name} x1={x1} y1={y1} x2={x2} y2={y2} />;
+          })}
+      </svg>
+      {points.map(({ player, x, y }) => (
+        <div
+          className={`seat-node ${player.name === currentPlayerName ? "seat-node-current" : ""} ${
+            player.name === meName ? "seat-node-me" : ""
+          } ${!player.connected ? "seat-node-offline" : ""}`}
+          key={player.name}
+          style={{ left: `${x}%`, top: `${y}%` }}
+        >
+          <PlayerAvatar player={player} />
+          <strong>{player.name.slice(0, 10)}</strong>
+          <span>{player.score || 0}</span>
+        </div>
+      ))}
+      <div className="seat-center-label">{players.length > 2 ? "Turn flow" : "Seats"}</div>
+    </div>
+  );
+};
+
+const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, onClose, onConfirm }) => {
+  const [selectedTarget, setSelectedTarget] = useState(
+    opponents.some((player) => player.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
+  );
+  const [selectedStorageCardId, setSelectedStorageCardId] = useState("");
+  const [selectedHandIndex, setSelectedHandIndex] = useState(0);
+  const [targetGoalIndex, setTargetGoalIndex] = useState(0);
+  const [myGoalIndex, setMyGoalIndex] = useState(0);
+
+  const targetPlayer = gameState.players.find((player) => player.name === selectedTarget);
+
+  useEffect(() => {
+    setSelectedStorageCardId(targetPlayer?.storage?.[0]?.id || "");
+    setSelectedHandIndex(0);
+    setTargetGoalIndex(0);
+  }, [selectedTarget, targetPlayer?.storage]);
+
+  const confirm = () => {
+    const payload = { targetName: selectedTarget };
+    if (card.key === "theft") payload.storageCardId = selectedStorageCardId;
+    if (card.key === "robbery") payload.handIndex = selectedHandIndex;
+    if (card.key === "goalRemoval") payload.goalIndex = targetGoalIndex;
+    if (card.key === "goalSwap") {
+      payload.goalIndex = targetGoalIndex;
+      payload.myGoalIndex = myGoalIndex;
+    }
+    onConfirm(payload);
+  };
+
+  const canConfirm = Boolean(
+    selectedTarget &&
+      (card.key !== "theft" || selectedStorageCardId) &&
+      (card.key !== "robbery" || (targetPlayer?.handCount || 0) > 0)
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="action-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Configure action</p>
+            <h2>{card.name}</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+        </div>
+        <p className="modal-description">{card.description}</p>
+
+        <label className="modal-label" htmlFor="action-target">Target player</label>
+        <select
+          id="action-target"
+          className="modal-select"
+          value={selectedTarget}
+          onChange={(event) => setSelectedTarget(event.target.value)}
+        >
+          {opponents.map((player) => (
+            <option key={player.name} value={player.name}>{player.name}</option>
+          ))}
+        </select>
+
+        {card.key === "theft" && (
+          <div className="modal-picker-section">
+            <h3>Choose a stored resource to steal</h3>
+            <div className="selectable-card-grid">
+              {(targetPlayer?.storage || []).map((storedCard) => (
+                <button
+                  key={storedCard.id}
+                  type="button"
+                  className={`selectable-card ${selectedStorageCardId === storedCard.id ? "selected" : ""}`}
+                  onClick={() => setSelectedStorageCardId(storedCard.id)}
+                >
+                  <CardFace card={storedCard} compact />
+                </button>
+              ))}
+              {(targetPlayer?.storage || []).length === 0 && <p className="empty-storage">No storage cards to steal.</p>}
+            </div>
+          </div>
+        )}
+
+        {card.key === "robbery" && (
+          <div className="modal-picker-section">
+            <h3>Choose a hidden hand slot</h3>
+            <div className="hidden-hand-grid">
+              {Array.from({ length: targetPlayer?.handCount || 0 }).map((_, index) => (
+                <button
+                  key={index}
+                  className={`hidden-hand-slot ${selectedHandIndex === index ? "selected" : ""}`}
+                  onClick={() => setSelectedHandIndex(index)}
+                  type="button"
+                >
+                  Card {index + 1}
+                </button>
+              ))}
+              {(targetPlayer?.handCount || 0) === 0 && <p className="empty-storage">No hand cards to rob.</p>}
+            </div>
+          </div>
+        )}
+
+        {(card.key === "goalRemoval" || card.key === "goalSwap") && (
+          <div className="modal-picker-section goal-index-picker">
+            {card.key === "goalSwap" && (
+              <div>
+                <h3>Your goal</h3>
+                <div className="hidden-hand-grid">
+                  {me.goals.map((goal, index) => (
+                    <button
+                      type="button"
+                      key={goal.id}
+                      className={`hidden-hand-slot ${myGoalIndex === index ? "selected" : ""}`}
+                      onClick={() => setMyGoalIndex(index)}
+                    >
+                      {goal.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <h3>{targetPlayer?.name || "Target"}'s goal slot</h3>
+              <div className="hidden-hand-grid">
+                {Array.from({ length: targetPlayer?.goalCount || 0 }).map((_, index) => (
+                  <button
+                    type="button"
+                    key={index}
+                    className={`hidden-hand-slot ${targetGoalIndex === index ? "selected" : ""}`}
+                    onClick={() => setTargetGoalIndex(index)}
+                  >
+                    Goal {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button className="gold-button modal-confirm-button" disabled={!canConfirm} onClick={confirm}>
+          Play {card.name}
+        </button>
+      </section>
+    </div>
+  );
+};
+
+const TradeBuilderModal = ({ hand, opponents, defaultTargetName, onClose, onConfirm }) => {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [targetMode, setTargetMode] = useState("everyone");
+  const [target, setTarget] = useState(
+    opponents.some((player) => player.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
+  );
+  const [useBinding, setUseBinding] = useState(false);
+
+  const hasBinding = hand.some((card) => card.key === "bindingContract" && !selectedIds.includes(card.id));
+
+  const toggleCard = (id) => {
+    setSelectedIds((ids) => {
+      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
+      if (ids.length >= 4) return ids;
+      return [...ids, id];
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="trade-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Open trade</p>
+            <h2>Make an offer</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="trade-target-row">
+          <label>
+            <input
+              type="radio"
+              checked={targetMode === "everyone"}
+              onChange={() => setTargetMode("everyone")}
+            />
+            Offer to everyone
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={targetMode === "specific"}
+              onChange={() => setTargetMode("specific")}
+            />
+            Specific player
+          </label>
+          {targetMode === "specific" && (
+            <select className="modal-select" value={target} onChange={(event) => setTarget(event.target.value)}>
+              {opponents.map((player) => (
+                <option key={player.name} value={player.name}>{player.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <label className="binding-checkbox">
+          <input
+            type="checkbox"
+            checked={useBinding}
+            disabled={!hasBinding}
+            onChange={(event) => setUseBinding(event.target.checked)}
+          />
+          Use Binding Contract immediately {hasBinding ? "" : "(none available or selected)"}
+        </label>
+
+        <h3>Select 0 to 4 cards to offer</h3>
+        <SelectableHandGrid hand={hand} selectedIds={selectedIds} onToggle={toggleCard} />
+
+        <button
+          className="gold-button modal-confirm-button"
+          disabled={targetMode === "specific" && !target}
+          onClick={() => onConfirm({
+            targetName: targetMode === "specific" ? target : "",
+            cardIds: selectedIds,
+            useBinding,
+          })}
+        >
+          Offer Trade
+        </button>
+      </section>
+    </div>
+  );
+};
+
+const TradeResponseModal = ({ hand, trade, onClose, onConfirm }) => {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const toggleCard = (id) => {
+    setSelectedIds((ids) => {
+      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
+      if (ids.length >= 4) return ids;
+      return [...ids, id];
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="trade-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Respond to trade</p>
+            <h2>{trade.initiatorName}'s offer</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+        </div>
+
+        <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
+        <h3>Select 0 to 4 cards to offer back</h3>
+        <SelectableHandGrid hand={hand} selectedIds={selectedIds} onToggle={toggleCard} />
+
+        <button className="gold-button modal-confirm-button" onClick={() => onConfirm({ cardIds: selectedIds })}>
+          Send Response
+        </button>
+      </section>
+    </div>
+  );
+};
+
+const SelectableHandGrid = ({ hand, selectedIds, onToggle }) => (
+  <div className="selectable-card-grid trade-select-grid">
+    {hand.map((card) => (
+      <button
+        key={card.id}
+        type="button"
+        className={`selectable-card ${selectedIds.includes(card.id) ? "selected" : ""}`}
+        onClick={() => onToggle(card.id)}
+      >
+        <CardFace card={card} compact />
+        <span>{card.name}</span>
+      </button>
+    ))}
+  </div>
+);
+
+const InvestorModal = ({
+  goal,
+  goalIndex,
+  storage,
+  opponents,
+  defaultTargetName,
+  onClose,
+  onConfirm,
+}) => {
+  const moneyCards = storage.filter((card) => card.key === "money");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [target, setTarget] = useState(
+    opponents.some((player) => player.name === defaultTargetName)
+      ? defaultTargetName
+      : opponents[0]?.name || ""
+  );
+
+  const selectedCards = moneyCards.filter((card) => selectedIds.includes(card.id));
+  const availableCards = moneyCards.filter((card) => !selectedIds.includes(card.id));
+  const previewPoints = selectedIds.length >= 2 ? Math.max(1, selectedIds.length - 1) : 0;
+
+  const addCard = (cardId) => {
+    setSelectedIds((ids) => (ids.includes(cardId) ? ids : [...ids, cardId]));
+  };
+
+  const removeCard = (cardId) => {
+    setSelectedIds((ids) => ids.filter((id) => id !== cardId));
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="investor-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Special completion</p>
+            <h2>Investor</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+        </div>
+
+        <p className="modal-description">{goal.description}</p>
+
+        <label className="modal-label" htmlFor="investor-target">Invest in</label>
+        <select
+          id="investor-target"
+          className="modal-select"
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+        >
+          {opponents.map((player) => (
+            <option key={player.name} value={player.name}>{player.name}</option>
+          ))}
+        </select>
+
+        <div className="investor-columns">
+          <div>
+            <h3>Money in storage</h3>
+            <div className="investor-money-list">
+              {availableCards.map((card) => (
+                <MiniMoneyCard
+                  key={card.id}
+                  card={card}
+                  draggable
+                  onDragStart={(event) => event.dataTransfer.setData("text/plain", card.id)}
+                  onClick={() => addCard(card.id)}
+                />
+              ))}
+              {availableCards.length === 0 && <p className="empty-storage">No unselected Money left.</p>}
+            </div>
+          </div>
+
+          <div
+            className="investor-drop-zone"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              addCard(event.dataTransfer.getData("text/plain"));
+            }}
+          >
+            <h3>Dragged investment</h3>
+            <div className="investor-money-list selected-money-list">
+              {selectedCards.map((card) => (
+                <MiniMoneyCard
+                  key={card.id}
+                  card={card}
+                  selected
+                  onClick={() => removeCard(card.id)}
+                />
+              ))}
+              {selectedCards.length === 0 && <p className="empty-storage">Drag at least 2 Money cards here.</p>}
+            </div>
+            <div className="investor-preview">
+              <span>{selectedIds.length} Money selected</span>
+              <strong>{previewPoints} point{previewPoints === 1 ? "" : "s"}</strong>
+            </div>
+          </div>
+        </div>
+
+        <button
+          className="gold-button investor-confirm-button"
+          disabled={selectedIds.length < 2 || !target}
+          onClick={() => onConfirm({ goalIndex, targetName: target, moneyCardIds: selectedIds })}
+        >
+          Confirm Investment
+        </button>
+      </section>
+    </div>
+  );
+};
+
+const MiniMoneyCard = ({ card, selected = false, onClick, draggable = false, onDragStart }) => (
+  <button
+    type="button"
+    className={`mini-money-card ${selected ? "selected-mini-money-card" : ""}`}
+    draggable={draggable}
+    onDragStart={onDragStart}
+    onClick={onClick}
+    title={selected ? "Click to remove." : "Drag or click to invest."}
+  >
+    {getCardImage(card) ? <img src={getCardImage(card)} alt={card.name} /> : <span>{card.name}</span>}
+    <span className="hover-card-details">
+      <strong>{card.name}</strong>
+      <small>{card.description || "Money resource."}</small>
+    </span>
+  </button>
+);
+
+const PlayerAvatar = ({ player, size = "normal" }) => (
+  <span className={`player-avatar player-avatar-${size}`} style={getAvatarStyle(player)}>
+    {getInitial(player)}
+  </span>
+);
+
+const DiscardPileStack = ({ playingCards = [], goalCards = [], onOpen }) => {
+  const count = playingCards.length + goalCards.length;
+  const topCard = playingCards[playingCards.length - 1] || goalCards[goalCards.length - 1] || null;
+
+  return (
+    <section className="discard-pile-dock" aria-label="Discard pile">
+      <button className="discard-pile-stack" type="button" onClick={onOpen}>
+        <span className="discard-card-layer discard-layer-one" />
+        <span className="discard-card-layer discard-layer-two" />
+        <span className="discard-card-layer discard-layer-three">
+          {topCard ? <CardFace card={topCard} compact /> : <span className="empty-discard-face">Discard</span>}
+        </span>
+        <strong>{count}</strong>
+      </button>
+      <div>
+        <p className="eyebrow">Centre pile</p>
+        <h2>Discard Pile</h2>
+        <span>{count ? "Click to inspect played cards" : "Nothing discarded yet"}</span>
+      </div>
+    </section>
+  );
+};
+
+const DiscardPileModal = ({ playingCards = [], goalCards = [], onClose }) => {
+  const combined = [
+    ...playingCards.map((card) => ({ ...card, pileLabel: "Playing discard" })),
+    ...goalCards.map((card) => ({ ...card, pileLabel: "Goal discard" })),
+  ].reverse();
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="discard-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Table memory</p>
+            <h2>Discard Pile</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+        </div>
+        {combined.length === 0 ? (
+          <p className="empty-storage">No cards have been discarded or played yet.</p>
+        ) : (
+          <div className="discard-modal-grid">
+            {combined.map((card) => (
+              <article className="discard-modal-card" key={`${card.pileLabel}-${card.id}`}>
+                <CardFace card={card} compact />
+                <span>{card.pileLabel}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
+
+const MagicHandChoiceModal = ({ choice, onConfirm }) => {
+  const [selectedCardId, setSelectedCardId] = useState("");
+  const selectedCard = choice.choices?.find((card) => card.id === selectedCardId);
+
+  return (
+    <div className="modal-backdrop locked-choice-backdrop">
+      <section className="discard-modal magic-hand-choice-modal">
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Magic Hand</p>
+            <h2>Choose from the discard pile</h2>
+          </div>
+        </div>
+        <p className="modal-description">Pick one available playing card, then confirm to add it to your hand.</p>
+        <div className="discard-modal-grid">
+          {(choice.choices || []).map((card) => (
+            <button
+              type="button"
+              className={`discard-modal-card selectable-discard-card ${selectedCardId === card.id ? "selected" : ""}`}
+              key={card.id}
+              onClick={() => setSelectedCardId(card.id)}
+            >
+              <CardFace card={card} compact />
+              <span>{card.name}</span>
+            </button>
+          ))}
+        </div>
+        <div className="magic-hand-confirm-row">
+          <span>{selectedCard ? `${selectedCard.name} selected` : "No card selected"}</span>
+          <button className="gold-button" disabled={!selectedCardId} onClick={() => onConfirm(selectedCardId)}>
+            Confirm Pick
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const OracleRevealModal = ({ reveal, onClose }) => (
+  <div className="modal-backdrop" onClick={onClose}>
+    <section className="discard-modal oracle-reveal-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-heading">
+        <div>
+          <p className="eyebrow">Oracle's Power</p>
+          <h2>{reveal.targetName}'s Hand</h2>
+        </div>
+        <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+      </div>
+      {(reveal.cards || []).length === 0 ? (
+        <p className="empty-storage">That player has no cards in hand.</p>
+      ) : (
+        <div className="discard-modal-grid oracle-hand-grid">
+          {reveal.cards.map((card) => (
+            <article className="discard-modal-card" key={card.id}>
+              <CardFace card={card} compact />
+              <span>{card.name}</span>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  </div>
+);

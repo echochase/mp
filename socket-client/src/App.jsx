@@ -10,26 +10,18 @@ import { useEffect, useState } from "react";
 import { Settings } from "../components/Settings";
 import { About } from "../components/About";
 import { UpdateNotes } from "../components/UpdateNotes";
+import { CardList } from "../screens/CardList";
 
 export default function App() {
   const [socket, setSocket] = useState(null);
   const [name, setName] = useState(localStorage.getItem("name") || "");
   const [room, setRoom] = useState(localStorage.getItem("room") || "");
 
-  let storedTheme = localStorage.getItem("theme");
-  if (!storedTheme) {
-    localStorage.setItem("theme", "dark");
-    storedTheme = "dark";
-  }
-  const isDark = storedTheme === "dark";
-  document.body.classList.toggle("dark", isDark);
-
   const backend = import.meta.env.VITE_BACKEND_URL;
 
   useEffect(() => {
     const newSocket = io(backend);
     setSocket(newSocket);
-
     return () => newSocket.disconnect();
   }, []);
 
@@ -53,6 +45,7 @@ export default function App() {
         <Route path="/play/:roomCode" element={<Game {...sharedProps} />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/about" element={<About />} />
+        <Route path="/card-list" element={<CardList />} />
         <Route path="/update-notes" element={<UpdateNotes />} />
       </Routes>
     </BrowserRouter>

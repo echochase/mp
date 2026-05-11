@@ -1,75 +1,76 @@
 .settings-wrapper {
   display: flex;
   justify-content: center;
-  height: 100%;
+  align-items: center;
+  min-height: 100vh;
   padding: 20px;
+  background: var(--bg);
 }
 
 .settings-panel {
-  background-color: var(--settings-bg);
-  border: 2px solid #444;
+  background: var(--surface);
+  border: 1px solid var(--border-gold);
   border-radius: 20px;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
-  padding: 40px;
-  max-width: 300px;
-  max-height: 500px;
-  width: 70vw;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(201, 168, 76, 0.1);
+  padding: 48px 40px;
+  max-width: 360px;
+  width: 90vw;
   display: flex;
   flex-direction: column;
-  gap: 30px;
-  color: whitesmoke;
+  gap: 24px;
   align-items: center;
 }
 
 .settings-title {
-  font-size: 2.5rem;
-  font-weight: bold;
-  margin: 0;
+  font-family: 'Cinzel', serif;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 60%, var(--gold-dim) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   position: relative;
 }
 
 .settings-title::after {
   content: "";
   display: block;
-  width: 110px;
-  height: 4px;
-  background: #ff5252;
-  margin: 10px auto 0 auto;
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  margin: 10px auto 0;
   border-radius: 2px;
 }
 
-.MuiFormControlLabel-root {
-  background-color: var(--setting-bg);
-  border: 1.5px solid rgba(0, 0, 0, 0.606);
-  color: var(--text);
-  padding: 10px 15px;
-  border-radius: 12px;
-  width: 100%;
-  transition: background 0.3s ease;
+.settings-stub {
+  font-family: 'Crimson Pro', serif;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+  text-align: center;
 }
 
-.MuiFormControlLabel-root:hover {
-  background-color: #656565;
+.settings-panel .back-button {
+  position: static;
+  transform: none;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 0.6rem 1.8rem;
+  border-radius: 999px;
+  margin-top: 8px;
 }
 
-.back-button {
-  background-color: #e53935;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  font-size: 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-top: 20px;
-  transition: background 0.3s ease;
-}
-
-.back-button:hover {
-  background-color: #c62828;
+.settings-panel .back-button:hover {
+  color: var(--gold-light);
+  border-color: var(--gold);
+  background: rgba(201, 168, 76, 0.07);
 }
 
 @media only screen and (max-width: 600px) {
   .settings-panel {
-    max-width: 275px;
+    padding: 36px 24px;
   }
 }

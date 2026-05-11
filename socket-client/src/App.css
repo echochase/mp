@@ -1,21 +1,5 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
   text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
 .center {
@@ -32,6 +16,7 @@
   gap: 20px;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .menu-button {
@@ -41,20 +26,67 @@
   width: 150px;
   height: 50px;
   border-radius: 7px;
-  border: 2px solid white;
-  color: white;
+  border: 1px solid var(--border-gold);
+  color: var(--gold-light);
+  background: transparent;
+  font-family: 'Cinzel', serif;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.menu-button.red {
+  background-color: var(--crimson-dark);
+  border-color: var(--crimson);
+  color: var(--text);
 }
 
-.card {
-  padding: 2em;
+.modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--surface);
+  color: var(--text);
+  width: 500px;
+  padding: 24px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-gold);
+  border-radius: 12px;
+  font-family: 'Crimson Pro', serif;
 }
 
-.read-the-docs {
-  color: #888;
+.back-button {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: rgba(8, 10, 15, 0.9);
+  backdrop-filter: blur(10px);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 0.65rem 2rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'Crimson Pro', serif;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.back-button:hover {
+  color: var(--gold-light);
+  border-color: var(--gold);
+  background: rgba(201, 168, 76, 0.08);
+}
+
+.version-number {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: var(--text-dim);
+}
+
+.warning {
+  margin-bottom: 10px;
+  color: #e57373;
 }
