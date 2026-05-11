@@ -1,16 +1,16 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import "../styles/common.css";
+import "./styles/common.css";
 import "./App.css";
-import { HomePage } from "../screens/HomePage";
-import { EnterDetails } from "../screens/EnterDetails";
-import { Lobby } from "../screens/Lobby";
-import { Game } from "../screens/Game";
+import { HomePage } from "./screens/HomePage";
+import { EnterDetails } from "./screens/EnterDetails";
+import { Lobby } from "./screens/Lobby";
+import { Game } from "./screens/Game";
 import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
-import { Settings } from "../components/Settings";
-import { About } from "../components/About";
-import { UpdateNotes } from "../components/UpdateNotes";
-import { CardList } from "../screens/CardList";
+import { Settings } from "./components/Settings";
+import { About } from "./components/About";
+import { UpdateNotes } from "./components/UpdateNotes";
+import { CardList } from "./screens/CardList";
 
 export default function App() {
   const [socket, setSocket] = useState(null);
