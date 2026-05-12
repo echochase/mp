@@ -733,6 +733,7 @@ function startGame(roomData) {
     player.mustDiscard = false;
     player.flags = {};
     player.privateReveal = null;
+    player.completedGoals = [];
     if (!player.avatarColor) player.avatarColor = randomAvatarColor();
   });
 
@@ -1415,7 +1416,8 @@ function completeGoal(roomData, player, goalIndex, scoreOverride, logDetail = ''
   const [completed] = player.goals.splice(goalIndex, 1);
   const points = Number.isFinite(scoreOverride) ? scoreOverride : completed.points || 1;
   player.score += points;
-  roomData.goalDiscard.push(completed);
+  if (!player.completedGoals) player.completedGoals = [];
+  player.completedGoals.push({ ...completed, pointsAwarded: points });
   const replacement = drawCard(roomData, 'goal');
   if (replacement) player.goals.push(replacement);
 
@@ -1614,6 +1616,7 @@ function getPrivatePlayerState(roomData, player) {
     })),
     actionPlayed: player.actionPlayed || false,
     goalRerolled: player.goalRerolled || false,
+    completedGoals: player.completedGoals || [],
     tradeUsed: player.tradeUsed || false,
     mustDiscard: player.mustDiscard || false,
     isYourTurn: currentPlayer(roomData)?.name === player.name,

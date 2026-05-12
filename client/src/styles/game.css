@@ -209,6 +209,59 @@
   font-weight: 600;
 }
 
+/* ── Completed goals panel ───────────────────────────────────────────────── */
+
+.completed-goals-panel {
+  flex-shrink: 0;
+}
+
+.completed-goals-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.completed-goals-pile-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.completed-goals-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.completed-goal-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.completed-goal-name {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.completed-goal-pts {
+  color: var(--gold-light);
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .split-heading {
   display: flex;
   align-items: flex-start;
@@ -691,7 +744,7 @@ button:disabled {
 }
 
 .log-panel {
-  height: 260px;
+  height: 300px;
   display: flex;
   flex-direction: column;
 }
@@ -833,6 +886,11 @@ button:disabled {
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 10px;
+}
+
+.close-modal-button {
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .modal-description {
@@ -1734,37 +1792,45 @@ button:disabled {
 
 .discard-modal {
   position: relative;
-  width: min(920px, calc(100vw - 32px));
+  width: fit-content;
+  max-width: calc(100vw - 48px);
   max-height: calc(100vh - 48px);
   overflow: auto;
   border-radius: 22px;
   border: 1px solid rgba(201, 168, 76, 0.28);
   background: rgba(19, 23, 31, 0.98);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62);
-  padding: 20px;
-}
-
-.discard-modal-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
-  gap: 12px;
-  align-items: start;
-}
-
-.discard-modal-card {
-  display: grid;
-  gap: 7px;
-  padding: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(8, 10, 15, 0.48);
-  color: var(--text-muted);
+  padding: 28px 32px;
   text-align: center;
 }
 
-.discard-modal-card > span {
-  font-size: 0.72rem;
-  line-height: 1.05;
+.discard-modal-close {
+  display: block;
+  width: calc(100% + 64px);
+  margin: 4px -32px -28px;
+  padding: 8px;
+  border-radius: 0 0 22px 22px;
+  border-top: 1px solid rgba(201, 168, 76, 0.18);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.discard-modal-title {
+  margin: 4px 0 0;
+  font-size: 1.6rem;
+}
+
+.discard-modal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 28px;
+}
+
+.discard-modal-card {
+  width: 72px;
 }
 
 .selectable-discard-card {
@@ -2005,7 +2071,7 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.03);
   width: 100%;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 .table-chip-current {

@@ -134,6 +134,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [turnPulse, setTurnPulse] = useState(0);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
+  const [completedGoalsPileOpen, setCompletedGoalsPileOpen] = useState(false);
   const [dismissedRevealIds, setDismissedRevealIds] = useState(new Set());
   const [investorGoal, setInvestorGoal] = useState(null);
   const [actionModalCard, setActionModalCard] = useState(null);
@@ -350,7 +351,7 @@ useEffect(
       {noticeToast && <div className={`game-toast notice-toast ${noticeToast.type || "info"}`}>{noticeToast.text}</div>}
 
       <section className="table-layout">
-        {/* ── LEFT SIDEBAR: progress + goals ── */}
+        {/* ── LEFT SIDEBAR: progress + goals + completed goals ── */}
         <aside className="game-sidebar">
           <MyProgressPanel me={me} isCurrent={me.name === gameState.currentPlayerName} />
           <section className="game-panel goals-panel compact-panel compact-goals-panel">
@@ -373,6 +374,10 @@ useEffect(
               ))}
             </div>
           </section>
+          <CompletedGoalsPanel
+            completedGoals={me.completedGoals || []}
+            onOpen={() => setCompletedGoalsPileOpen(true)}
+          />
         </aside>
 
         {/* ── CENTRE: tabletop ── */}
@@ -545,6 +550,14 @@ useEffect(
         />
       )}
 
+      {completedGoalsPileOpen && (
+        <DiscardPileModal
+          title="Completed Goals"
+          goalCards={me.completedGoals || []}
+          onClose={() => setCompletedGoalsPileOpen(false)}
+        />
+      )}
+
       {goalDiscardPileOpen && (
         <DiscardPileModal
           title="Goal Discard"
@@ -552,8 +565,8 @@ useEffect(
           onClose={() => setGoalDiscardPileOpen(false)}
         />
       )}
-
-      {discardPileOpen && gameState.discardPile?.playing && (
+      
+      {discardPileOpen && (
         <DiscardPileModal
           title="Card Discard"
           playingCards={gameState.discardPile?.playing || []}
@@ -817,6 +830,45 @@ const TableDiscardPile = ({ cards = [], label = "Discard Pile", onOpen }) => {
   );
 };
 
+const CompletedGoalsPanel = ({ completedGoals = [], onOpen }) => {
+  const topGoal = completedGoals[completedGoals.length - 1];
+
+  return (
+    <section className="game-panel compact-panel completed-goals-panel">
+      <div className="panel-heading small-heading">
+        <p className="eyebrow">Achievements</p>
+        <h2>Completed Goals</h2>
+      </div>
+      <div className="completed-goals-body">
+        <button className="table-discard-pile completed-goals-pile-wrap" type="button" onClick={onOpen}>
+          <div className="table-discard-stack">
+            <span className="discard-card-layer discard-layer-one" />
+            {completedGoals.length > 1 && <span className="discard-card-layer discard-layer-two" />}
+            <span className="discard-card-layer discard-layer-three">
+              {topGoal
+                ? <CardFace card={topGoal} compact />
+                : <span className="empty-discard-face">Empty</span>}
+            </span>
+            <strong>{completedGoals.length}</strong>
+          </div>
+        </button>
+        {completedGoals.length === 0 ? (
+          <p className="empty-storage" style={{ fontSize: "0.78rem" }}>No goals completed yet.</p>
+        ) : (
+          <div className="completed-goals-list">
+            {completedGoals.map((goal, idx) => (
+              <div key={idx} className="completed-goal-entry">
+                <span className="completed-goal-name">{goal.name}</span>
+                <span className="completed-goal-pts">+{goal.pointsAwarded ?? goal.points ?? 1} pt</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
 const MyProgressPanel = ({ me, isCurrent }) => {
   const score = me?.score || 0;
   const pct = Math.min(100, (score / 10) * 100);
@@ -1021,7 +1073,7 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
             <p className="eyebrow">Configure action</p>
             <h2>{card.name}</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
         </div>
         <p className="modal-description">{card.description}</p>
 
@@ -1146,7 +1198,7 @@ const TradeBuilderModal = ({ hand, opponents, defaultTargetName, onClose, onConf
             <p className="eyebrow">Open trade</p>
             <h2>Make an offer</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
         </div>
 
         <div className="trade-target-row">
@@ -1222,7 +1274,7 @@ const TradeResponseModal = ({ hand, trade, onClose, onConfirm }) => {
             <p className="eyebrow">Respond to trade</p>
             <h2>{trade.initiatorName}'s offer</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
         </div>
 
         <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
@@ -1290,7 +1342,7 @@ const InvestorModal = ({
             <p className="eyebrow">Special completion</p>
             <h2>Investor</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
         </div>
 
         <p className="modal-description">{goal.description}</p>
@@ -1418,25 +1470,20 @@ const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section className="discard-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-heading">
-          <div>
-            <p className="eyebrow">Table memory</p>
-            <h2>{title}</h2>
-          </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
-        </div>
+        <p className="eyebrow" style={{ textAlign: "center" }}>Table Memory</p>
+        <h2 className="discard-modal-title">{title}</h2>
         {combined.length === 0 ? (
-          <p className="empty-storage">No cards have been discarded or played yet.</p>
+          <p className="empty-storage" style={{ textAlign: "center", margin: "24px 0" }}>Nothing here yet.</p>
         ) : (
           <div className="discard-modal-grid">
             {combined.map((card) => (
               <article className="discard-modal-card" key={`${card.pileLabel}-${card.id}`}>
                 <CardFace card={card} compact />
-                <span>{card.pileLabel}</span>
               </article>
             ))}
           </div>
         )}
+        <button className="ghost-button discard-modal-close" onClick={onClose}>Close</button>
       </section>
     </div>
   );
@@ -1488,7 +1535,7 @@ const OracleRevealModal = ({ reveal, onClose }) => (
           <p className="eyebrow">Oracle's Power</p>
           <h2>{reveal.targetName}'s Hand</h2>
         </div>
-        <button className="ghost-button close-modal-button" onClick={onClose}>Close</button>
+        <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
       </div>
       {(reveal.cards || []).length === 0 ? (
         <p className="empty-storage">That player has no cards in hand.</p>
