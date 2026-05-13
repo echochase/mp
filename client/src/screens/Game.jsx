@@ -554,11 +554,11 @@ useEffect(
         />
       )}
 
-      {discardPileOpen && (
+      {completedGoalsPileOpen && (
         <DiscardPileModal
-          title="Card Discard"
-          playingCards={gameState.discardPile?.playing || []}
-          onClose={() => setDiscardPileOpen(false)}
+          title="Completed Goals"
+          goalCards={me.completedGoals || []}
+          onClose={() => setCompletedGoalsPileOpen(false)}
         />
       )}
 
@@ -570,11 +570,11 @@ useEffect(
         />
       )}
 
-      {completedGoalsPileOpen && (
+      {discardPileOpen && (
         <DiscardPileModal
-          title="Completed Goals"
-          goalCards={me.completedGoals || []}
-          onClose={() => setCompletedGoalsPileOpen(false)}
+          title="Card Discard"
+          playingCards={gameState.discardPile?.playing || []}
+          onClose={() => setDiscardPileOpen(false)}
         />
       )}
 
@@ -956,16 +956,16 @@ const TableTopView = ({ players, me, currentPlayerName, meName, discardPile, dec
 
         {/* Table centre — draw deck + two discard piles */}
         <div className="tabletop-center">
+          <TableDiscardPile
+            cards={discardPile?.goals || []}
+            label="Goal Discard"
+            onOpen={onOpenGoalDiscard}
+          />
           <DrawDeck count={deckCounts?.playing ?? 0} />
           <TableDiscardPile
             cards={discardPile?.playing || []}
             label="Card Discard"
             onOpen={onOpenCardDiscard}
-          />
-          <TableDiscardPile
-            cards={discardPile?.goals || []}
-            label="Goal Discard"
-            onOpen={onOpenGoalDiscard}
           />
         </div>
 
