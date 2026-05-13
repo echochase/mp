@@ -127,6 +127,7 @@
   gap: 14px;
   min-width: 0;
   min-height: 0;
+  align-self: stretch;
 }
 
 .compact-hand-strip .card-strip {
@@ -1925,6 +1926,7 @@ button:disabled {
   gap: 10px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -1953,6 +1955,7 @@ button:disabled {
   border-radius: 13px;
   min-height: 72px;
   border: 1px solid transparent;
+  overflow: hidden;
   transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
 }
 
