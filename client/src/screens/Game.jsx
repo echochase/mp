@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "../styles/game.css";
 
@@ -29,6 +29,8 @@ const SPECIAL_RESOURCE_ORDER = ["gold", "diamond"];
 const CANCEL_REACTION_KEYS = ["iThinkNot", "absolutelyNot"];
 const TRADE_TOOL_KEYS = ["itsAScam", "bindingContract"];
 const TARGETED_ACTION_KEYS = ["theft", "robbery", "goalRemoval", "goalSwap", "oraclesPower"];
+
+const CardZoomContext = createContext(null);
 
 const AVATAR_COLORS = [
   "#7c3aed",
@@ -132,6 +134,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [noticeToast, setNoticeToast] = useState(null);
   const [newCardIds, setNewCardIds] = useState(new Set());
   const [turnPulse, setTurnPulse] = useState(0);
+  const [zoomedCard, setZoomedCard] = useState(null);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
   const [completedGoalsPileOpen, setCompletedGoalsPileOpen] = useState(false);
@@ -317,6 +320,7 @@ useEffect(
   }
 
   return (
+    <CardZoomContext.Provider value={setZoomedCard}>
     <main className="game-page">
       <header className="game-header compact-header">
         <div>
@@ -550,11 +554,11 @@ useEffect(
         />
       )}
 
-      {completedGoalsPileOpen && (
+      {discardPileOpen && (
         <DiscardPileModal
-          title="Completed Goals"
-          goalCards={me.completedGoals || []}
-          onClose={() => setCompletedGoalsPileOpen(false)}
+          title="Card Discard"
+          playingCards={gameState.discardPile?.playing || []}
+          onClose={() => setDiscardPileOpen(false)}
         />
       )}
 
@@ -565,12 +569,12 @@ useEffect(
           onClose={() => setGoalDiscardPileOpen(false)}
         />
       )}
-      
-      {discardPileOpen && (
+
+      {completedGoalsPileOpen && (
         <DiscardPileModal
-          title="Card Discard"
-          playingCards={gameState.discardPile?.playing || []}
-          onClose={() => setDiscardPileOpen(false)}
+          title="Completed Goals"
+          goalCards={me.completedGoals || []}
+          onClose={() => setCompletedGoalsPileOpen(false)}
         />
       )}
 
@@ -586,20 +590,39 @@ useEffect(
       )}
 
       <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
+
+      {zoomedCard && (
+        <CardZoomModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
+      )}
     </main>
+    </CardZoomContext.Provider>
   );
 };
 
 const CardFace = ({ card, className = "", compact = false }) => {
   const image = getCardImage(card);
+  const onZoom = useContext(CardZoomContext);
 
   return (
-    <div className={`card-face-button ${compact ? "compact-face" : ""} ${className}`} aria-label={card?.name || "Card"}>
+    <div
+      className={`card-face-button ${compact ? "compact-face" : ""} ${className}`}
+      aria-label={card?.name || "Card"}
+      onClick={(e) => { e.stopPropagation(); onZoom?.(card); }}
+    >
       {image ? <img src={image} alt={card.name} /> : <div className="card-fallback">{card.name}</div>}
-      <span className="hover-card-details">
-        <strong>{card.name || titleCase(card.key)}</strong>
-        <small>{card.description || "No description available."}</small>
-      </span>
+    </div>
+  );
+};
+
+const CardZoomModal = ({ card, onClose }) => {
+  const image = getCardImage(card);
+  return (
+    <div className="modal-backdrop card-zoom-backdrop" onClick={onClose}>
+      <div className="card-zoom-modal" onClick={(e) => e.stopPropagation()}>
+        {image
+          ? <img src={image} alt={card.name} className="card-zoom-image" />
+          : <div className="card-zoom-fallback">{card.name}</div>}
+      </div>
     </div>
   );
 };
@@ -933,23 +956,23 @@ const TableTopView = ({ players, me, currentPlayerName, meName, discardPile, dec
 
         {/* Table centre — draw deck + two discard piles */}
         <div className="tabletop-center">
-          <TableDiscardPile
-            cards={discardPile?.goals || []}
-            label="Goal Discard"
-            onOpen={onOpenGoalDiscard}
-          />
           <DrawDeck count={deckCounts?.playing ?? 0} />
           <TableDiscardPile
             cards={discardPile?.playing || []}
             label="Card Discard"
             onOpen={onOpenCardDiscard}
           />
+          <TableDiscardPile
+            cards={discardPile?.goals || []}
+            label="Goal Discard"
+            onOpen={onOpenGoalDiscard}
+          />
         </div>
 
         {/* My storage zone */}
         <div className={`tabletop-player-zone tabletop-me-zone${me?.name === currentPlayerName ? " tabletop-zone-current" : ""}`}>
           <p className="tabletop-zone-label">Your Storage</p>
-          <StorageCards cards={me?.storage || []} />
+          <StorageCards cards={me?.storage || []} paginate={false} />
         </div>
       </div>
 
@@ -957,8 +980,16 @@ const TableTopView = ({ players, me, currentPlayerName, meName, discardPile, dec
   );
 };
 
-const StorageCards = ({ cards = [], compact = false }) => {
+const PAGE_SIZE = 4;
+
+const StorageCards = ({ cards = [], compact = false, paginate = true }) => {
+  const [page, setPage] = useState(0);
   const groups = groupCardsByKey(cards);
+  const totalPages = Math.ceil(groups.length / PAGE_SIZE);
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const hasPrev = paginate && safePage > 0;
+  const hasNext = paginate && safePage < totalPages - 1;
+  const visible = paginate ? groups.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE) : groups;
 
   if (groups.length === 0) {
     return <p className="empty-storage">No resources stored yet.</p>;
@@ -966,7 +997,10 @@ const StorageCards = ({ cards = [], compact = false }) => {
 
   return (
     <div className={`storage-card-grid ${compact ? "compact-storage-cards" : ""}`}>
-      {groups.map(({ card, count }) => (
+      {hasPrev && (
+        <button className="storage-nav-btn" onClick={() => setPage(safePage - 1)}>&#8249;</button>
+      )}
+      {visible.map(({ card, count }) => (
         <article className="storage-stack-card" key={card.key} title={`${card.name} × ${count}`}>
           <div className="stack-shadow stack-shadow-one" />
           {count > 1 && <div className="stack-shadow stack-shadow-two" />}
@@ -974,6 +1008,9 @@ const StorageCards = ({ cards = [], compact = false }) => {
           <span className="storage-count-badge">×{count}</span>
         </article>
       ))}
+      {hasNext && (
+        <button className="storage-nav-btn" onClick={() => setPage(safePage + 1)}>&#8250;</button>
+      )}
     </div>
   );
 };
