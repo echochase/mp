@@ -28,7 +28,7 @@ const STANDARD_RESOURCE_ORDER = ["workforce", "candy", "money", "wood", "land", 
 const SPECIAL_RESOURCE_ORDER = ["gold", "diamond"];
 const CANCEL_REACTION_KEYS = ["iThinkNot", "absolutelyNot"];
 const TRADE_TOOL_KEYS = ["itsAScam", "bindingContract"];
-const TARGETED_ACTION_KEYS = ["theft", "robbery", "goalRemoval", "goalSwap", "oraclesPower"];
+const TARGETED_ACTION_KEYS = ["theft", "robbery", "goalRemoval", "goalSwap", "oraclesPower", "absoluteCalamity"];
 
 const AVATAR_COLORS = [
   "#7c3aed",
@@ -59,12 +59,6 @@ const fallbackAvatarColor = (name = "Player") => {
 const getAvatarStyle = (player = {}) => ({
   background: player.avatarColor || fallbackAvatarColor(player.name || "Player"),
 });
-
-const summarizeGoal = (goal) => {
-  const text = goal?.description || "Complete this goal automatically when its condition is met.";
-  if (goal?.key === "investor") return "Invest 2+ stored Money into another player.";
-  return text.length > 86 ? `${text.slice(0, 83).trim()}...` : text;
-};
 
 const titleCase = (value = "") =>
   value
@@ -135,8 +129,11 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
   const [completedGoalsPileOpen, setCompletedGoalsPileOpen] = useState(false);
+  const [expandedGoalCard, setExpandedGoalCard] = useState(null);
   const [dismissedRevealIds, setDismissedRevealIds] = useState(new Set());
   const [investorGoal, setInvestorGoal] = useState(null);
+  const [actionReadyGoal, setActionReadyGoal] = useState(null);
+  const [meditatorGoal, setMeditatorGoal] = useState(null);
   const [actionModalCard, setActionModalCard] = useState(null);
   const [tradeBuilderOpen, setTradeBuilderOpen] = useState(false);
   const [tradeResponseOpen, setTradeResponseOpen] = useState(false);
@@ -239,12 +236,9 @@ useEffect(
     [gameState, name]
   );
 
-  const currentPlayer = gameState?.players?.find(
-    (player) => player.name === gameState.currentPlayerName
-  );
   const defaultTargetName = opponents[0]?.name || "";
   const currentTurnPlayer = gameState?.players?.find((player) => player.name === gameState.currentPlayerName);
-  const oracleReveal = me?.privateReveal && !dismissedRevealIds.has(me.privateReveal.id) ? me.privateReveal : null;
+  const activeReveal = me?.privateReveal && !dismissedRevealIds.has(me.privateReveal.id) ? me.privateReveal : null;
   const magicHandChoice = me?.pendingChoice?.type === "magicHandDiscard" ? me.pendingChoice : null;
 
   const sortedHand = useMemo(
@@ -284,6 +278,22 @@ useEffect(
     setInvestorGoal(null);
   };
 
+  const completeActionReady = ({ goalIndex, actionCardIds }) => {
+    socket.emit("complete-action-ready", roomCode, {
+      goalIndex,
+      actionCardIds,
+    });
+    setActionReadyGoal(null);
+  };
+
+  const completeMeditator = ({ goalIndex, actionCardIds }) => {
+    socket.emit("complete-meditator", roomCode, {
+      goalIndex,
+      actionCardIds,
+    });
+    setMeditatorGoal(null);
+  };
+
   const createTrade = (payload) => {
     socket.emit("create-trade", roomCode, payload);
     setTradeBuilderOpen(false);
@@ -299,6 +309,27 @@ useEffect(
   const playScam = () => socket.emit("play-scam", roomCode);
   const chooseDiscardCard = (cardId) => socket.emit("choose-discard-card", roomCode, { cardId });
   const endTurn = () => socket.emit("end-turn", roomCode);
+
+  const canStoreResourceCard = (card) =>
+    Boolean(
+      card?.type === "resource" &&
+        me?.isYourTurn &&
+        !me?.mustDiscard &&
+        !tableLocked &&
+        !gameState?.winner &&
+        !gameState?.pendingChoice &&
+        !me?.pendingChoice
+    );
+
+  const storeResourceCard = (card) => {
+    if (!canStoreResourceCard(card)) return;
+    playCard(card);
+  };
+
+  const handleResourceDrop = (cardId) => {
+    const resourceCard = sortedHand.find((card) => String(card.id) === String(cardId));
+    storeResourceCard(resourceCard);
+  };
 
   const leaveTable = () => {
     socket.emit("leave-room", roomCode, name);
@@ -341,14 +372,26 @@ useEffect(
 
       {gameState.winner && (
         <section className="winner-banner compact-winner-banner">
-          <p className="eyebrow">Victory</p>
-          <h2>{gameState.winner} wins the pursuit.</h2>
+          <p className="eyebrow">{(gameState.winners || []).length > 1 ? "Tie" : "Victory"}</p>
+          <h2>
+            {(gameState.winners || []).length > 1
+              ? `${gameState.winners.join(" and ")} tie for the win.`
+              : `${gameState.winners?.[0] || gameState.winner} wins the pursuit.`}
+          </h2>
+          {gameState.winReason === "goalDeckDepleted" && (
+            <p className="winner-reason">The goal deck was depleted, so the highest score wins.</p>
+          )}
           <button onClick={() => navigate("/")}>Return Home</button>
         </section>
       )}
 
       {error && <div className="game-toast danger-toast">{error}</div>}
-      {noticeToast && <div className={`game-toast notice-toast ${noticeToast.type || "info"}`}>{noticeToast.text}</div>}
+      {noticeToast && (
+        <div className={`game-toast notice-toast ${noticeToast.type || "info"}`} role="status">
+          {noticeToast.type === "goal" && <span className="toast-kicker">Goal complete</span>}
+          <span>{noticeToast.text}</span>
+        </div>
+      )}
 
       <section className="table-layout">
         {/* ── LEFT SIDEBAR: progress + goals + completed goals ── */}
@@ -370,6 +413,10 @@ useEffect(
                   goalRerolled={me.goalRerolled}
                   onReroll={() => rerollGoal(index)}
                   onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
+                  onActionReady={() => setActionReadyGoal({ goal, goalIndex: index })}
+                  onMeditator={() => setMeditatorGoal({ goal, goalIndex: index })}
+                  actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
+                  onExpand={() => setExpandedGoalCard(goal)}
                 />
               ))}
             </div>
@@ -377,6 +424,7 @@ useEffect(
           <CompletedGoalsPanel
             completedGoals={me.completedGoals || []}
             onOpen={() => setCompletedGoalsPileOpen(true)}
+            onExpandGoal={setExpandedGoalCard}
           />
         </aside>
 
@@ -410,6 +458,8 @@ useEffect(
             meName={name}
             discardPile={gameState.discardPile}
             deckCounts={gameState.deckCounts}
+            canStoreDraggedResource={sortedHand.some(canStoreResourceCard)}
+            onStoreResourceDrop={handleResourceDrop}
             onOpenCardDiscard={() => setDiscardPileOpen(true)}
             onOpenGoalDiscard={() => setGoalDiscardPileOpen(true)}
           />
@@ -421,15 +471,10 @@ useEffect(
                 <h2>{me.hand.length} cards</h2>
               </div>
               <div className="hand-header-right">
-                <div className="hand-sort-note">
-                  <span>Resources</span>
-                  <span>Special</span>
-                  <span>Actions</span>
-                </div>
                 {me.mustDiscard && <span className="danger-pill">Discard {me.hand.length - 8}</span>}
                 <div className="hand-action-buttons">
                   <button
-                    className="ghost-button"
+                    className={`trade-turn-button ${me.canCreateTrade ? "active" : ""}`}
                     disabled={!me.canCreateTrade}
                     onClick={() => setTradeBuilderOpen(true)}
                   >
@@ -461,6 +506,7 @@ useEffect(
                   pendingAction={gameState.pendingAction}
                   activeTrade={gameState.activeTrade || gameState.pendingChoice || me.pendingChoice}
                   canReactToAction={me.canReactToAction}
+                  canDragToStorage={canStoreResourceCard(card)}
                   onPlay={() => beginPlayCard(card)}
                   onDiscard={() => discardCard(card)}
                 />
@@ -519,6 +565,7 @@ useEffect(
       {tradeBuilderOpen && (
         <TradeBuilderModal
           hand={sortedHand}
+          storage={me.storage || []}
           opponents={opponents}
           defaultTargetName={defaultTargetName}
           onClose={() => setTradeBuilderOpen(false)}
@@ -530,6 +577,7 @@ useEffect(
       {tradeResponseOpen && gameState.activeTrade && (
         <TradeResponseModal
           hand={sortedHand}
+          storage={me.storage || []}
           trade={gameState.activeTrade}
           onClose={() => setTradeResponseOpen(false)}
           onConfirm={respondTrade}
@@ -550,11 +598,32 @@ useEffect(
         />
       )}
 
+      {actionReadyGoal && (
+        <ActionReadyModal
+          goal={actionReadyGoal.goal}
+          goalIndex={actionReadyGoal.goalIndex}
+          hand={me.hand || []}
+          onClose={() => setActionReadyGoal(null)}
+          onConfirm={completeActionReady}
+        />
+      )}
+
+      {meditatorGoal && (
+        <MeditatorModal
+          goal={meditatorGoal.goal}
+          goalIndex={meditatorGoal.goalIndex}
+          hand={me.hand || []}
+          onClose={() => setMeditatorGoal(null)}
+          onConfirm={completeMeditator}
+        />
+      )}
+
       {completedGoalsPileOpen && (
         <DiscardPileModal
           title="Completed Goals"
           goalCards={me.completedGoals || []}
           onClose={() => setCompletedGoalsPileOpen(false)}
+          onExpandGoal={setExpandedGoalCard}
         />
       )}
 
@@ -563,6 +632,7 @@ useEffect(
           title="Goal Discard"
           goalCards={gameState.discardPile?.goals || []}
           onClose={() => setGoalDiscardPileOpen(false)}
+          onExpandGoal={setExpandedGoalCard}
         />
       )}
       
@@ -578,11 +648,15 @@ useEffect(
         <MagicHandChoiceModal choice={magicHandChoice} onConfirm={chooseDiscardCard} />
       )}
 
-      {oracleReveal && (
-        <OracleRevealModal
-          reveal={oracleReveal}
-          onClose={() => setDismissedRevealIds((ids) => new Set([...ids, oracleReveal.id]))}
+      {activeReveal && (
+        <RevealModal
+          reveal={activeReveal}
+          onClose={() => setDismissedRevealIds((ids) => new Set([...ids, activeReveal.id]))}
         />
+      )}
+
+      {expandedGoalCard && (
+        <ExpandedGoalCardModal card={expandedGoalCard} onClose={() => setExpandedGoalCard(null)} />
       )}
 
       <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
@@ -590,16 +664,66 @@ useEffect(
   );
 };
 
-const CardFace = ({ card, className = "", compact = false }) => {
+const CardFace = ({
+  card,
+  className = "",
+  compact = false,
+  hoverMode,
+  hoverButtonLabel = "Expand",
+  hoverButtonDisabled = false,
+  onHoverButtonClick,
+  noHoverScale = false,
+}) => {
   const image = getCardImage(card);
+  const cardTitle = card?.name || titleCase(card?.key || "Card");
+  const effectiveHoverMode = hoverMode || (card?.type === "resource" ? "title" : "details");
+
+  const handleHoverButtonClick = (event) => {
+    event.stopPropagation();
+    if (!hoverButtonDisabled) onHoverButtonClick?.();
+  };
+
+  const renderHoverLayer = () => {
+    if (effectiveHoverMode === "none") return null;
+
+    if (effectiveHoverMode === "play" || effectiveHoverMode === "expand") {
+      return (
+        <span className={`hover-card-action hover-card-action-${effectiveHoverMode}`}>
+          <button
+            type="button"
+            disabled={hoverButtonDisabled}
+            onClick={handleHoverButtonClick}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {hoverButtonLabel}
+          </button>
+        </span>
+      );
+    }
+
+    if (effectiveHoverMode === "title") {
+      return (
+        <span className="hover-card-details hover-card-title-only">
+          <strong>{cardTitle}</strong>
+        </span>
+      );
+    }
+
+    return (
+      <span className="hover-card-details">
+        <strong>{cardTitle}</strong>
+        <small>{card?.description || "No description available."}</small>
+      </span>
+    );
+  };
 
   return (
-    <div className={`card-face-button ${compact ? "compact-face" : ""} ${className}`} aria-label={card?.name || "Card"}>
-      {image ? <img src={image} alt={card.name} /> : <div className="card-fallback">{card.name}</div>}
-      <span className="hover-card-details">
-        <strong>{card.name || titleCase(card.key)}</strong>
-        <small>{card.description || "No description available."}</small>
-      </span>
+    <div
+      className={`card-face-button ${compact ? "compact-face" : ""} ${noHoverScale ? "no-hover-scale" : ""} hover-mode-${effectiveHoverMode} ${className}`}
+      aria-label={cardTitle}
+    >
+      {image ? <img src={image} alt={cardTitle} /> : <div className="card-fallback">{cardTitle}</div>}
+      {renderHoverLayer()}
     </div>
   );
 };
@@ -615,6 +739,7 @@ const PlayingCard = ({
   pendingAction,
   activeTrade,
   canReactToAction,
+  canDragToStorage,
   onPlay,
   onDiscard,
 }) => {
@@ -633,29 +758,56 @@ const PlayingCard = ({
     isYourTurn &&
     !actionPlayed;
   const showPlayButton = canPlayResource || canPlayNormalAction || canReact;
+  const isAction = !isResource;
+  const showActionHoverPlay = isAction && !disabled && (canPlayNormalAction || canReact);
+  const playDisabled = disabled || (!canPlayResource && !canPlayNormalAction && !canReact);
+
+  const handleDragStart = (event) => {
+    if (!canDragToStorage) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-mp-resource-card-id", String(card.id));
+    event.dataTransfer.setData("text/plain", String(card.id));
+  };
 
   return (
     <article
       className={`mp-card compact-mp-card ${isResource ? "resource-card" : "action-card"} ${
         card.specialResource ? "special-resource-card" : ""
-      } ${isNew ? "draw-new-card" : ""}`}
+      } ${isNew ? "draw-new-card" : ""} ${canDragToStorage ? "draggable-resource-card" : ""}`}
+      draggable={Boolean(canDragToStorage)}
+      onDragStart={handleDragStart}
     >
-      <CardFace card={card} />
+      <CardFace
+        card={card}
+        hoverMode={isAction ? (showActionHoverPlay ? "play" : "none") : undefined}
+        hoverButtonLabel="Play"
+        hoverButtonDisabled={playDisabled}
+        onHoverButtonClick={onPlay}
+      />
       <div className="card-actions compact-card-actions">
         {mustDiscard ? (
           <button className="danger-button" disabled={disabled || Boolean(activeTrade || pendingAction)} onClick={onDiscard}>
             Discard
           </button>
-        ) : showPlayButton ? (
-          <button
-            disabled={disabled || (!canPlayResource && !canPlayNormalAction && !canReact)}
-            onClick={onPlay}
-          >
-            {isResource ? "Store" : isCancelReaction ? "React" : "Play"}
+        ) : isResource && showPlayButton ? (
+          <button disabled={playDisabled} onClick={onPlay}>
+            Store
           </button>
         ) : (
           <span className="card-state-chip">
-            {isCancelReaction ? "Reaction only" : isTradeTool ? "Trade tool" : tableLocked ? "Waiting" : "Unavailable"}
+            {isAction && showPlayButton
+              ? "Hover to play"
+              : isCancelReaction
+                ? "Reaction only"
+                : isTradeTool
+                  ? "Trade tool"
+                  : tableLocked
+                    ? "Waiting"
+                    : "Unavailable"}
           </span>
         )}
       </div>
@@ -715,6 +867,12 @@ const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, onDecline
         <span className={`trade-state-pill ${trade.state}`}>{titleCase(trade.state)}</span>
       </div>
 
+      {trade.bindingUsed && (
+        <p className="binding-contract-alert">
+          {trade.initiatorName} used Binding Contract on this trade. If the trade is accepted, no one can use It's a Scam.
+        </p>
+      )}
+
       <div className="trade-offers-grid">
         <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
         <TradeOffer title={trade.responderName ? `${trade.responderName} offers` : "Waiting for response"} cards={trade.responderOffer} />
@@ -730,7 +888,7 @@ const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, onDecline
       <div className="trade-panel-actions">
         {canRespond && <button onClick={onRespond}>Respond to trade</button>}
         {canAccept && <button className="gold-button" onClick={onAccept}>Accept trade</button>}
-        {canDecline && <button className="ghost-button" onClick={onDecline}>Cancel trade</button>}
+        {canDecline && <button className="danger-outline-button" onClick={onDecline}>Cancel trade</button>}
         {isScamWindow && isParticipant && (
           <button className="danger-button" disabled={!me.canPlayScam} onClick={onScam}>
             {me.canPlayScam ? "Play It's a Scam" : trade.scamsPlayed.includes(name) ? "Scam played" : "No scam available"}
@@ -763,19 +921,33 @@ const GoalCard = ({
   goalRerolled,
   onReroll,
   onInvestor,
+  onActionReady,
+  onMeditator,
+  actionCardsAvailable = 0,
+  onExpand,
 }) => {
   const isInvestor = goal.key === "investor";
+  const isActionReady = goal.key === "action-ready";
+  const isMeditator = goal.key === "meditator";
   const canOpenInvestor = isInvestor && isYourTurn && (goal.investorMoneyAvailable || 0) >= 2;
+  const canOpenActionReady = isActionReady && isYourTurn && actionCardsAvailable >= 7;
+  const canOpenMeditator = isMeditator && isYourTurn && actionCardsAvailable >= 4;
 
   return (
     <article className={`goal-card-box compact-goal-card ${isInvestor ? "investor-goal-card" : ""}`}>
-      <CardFace card={goal} compact />
+      <CardFace
+        card={goal}
+        compact
+        hoverMode="expand"
+        hoverButtonLabel="Expand"
+        onHoverButtonClick={onExpand}
+        noHoverScale
+      />
       <div className="goal-meta compact-goal-meta">
         <strong>
           {isInvestor ? "Variable" : `${goal.points || 1} pt${(goal.points || 1) === 1 ? "" : "s"}`}
         </strong>
         <p>{goal.name}</p>
-        <small className="goal-condition-summary">{summarizeGoal(goal)}</small>
       </div>
       <div className="goal-actions compact-goal-actions">
         {isInvestor && (
@@ -783,8 +955,18 @@ const GoalCard = ({
             Invest
           </button>
         )}
+        {isActionReady && (
+          <button disabled={disabled || !canOpenActionReady} onClick={onActionReady}>
+            Reveal Actions
+          </button>
+        )}
+        {isMeditator && (
+          <button disabled={disabled || !canOpenMeditator} onClick={onMeditator}>
+            Discard Actions
+          </button>
+        )}
         <button
-          className="ghost-button"
+          className={`reroll-goal-button ${isYourTurn && !goalRerolled && !disabled ? "active" : ""}`}
           disabled={disabled || !isYourTurn || goalRerolled}
           onClick={onReroll}
         >
@@ -821,7 +1003,7 @@ const TableDiscardPile = ({ cards = [], label = "Discard Pile", onOpen }) => {
         <span className="discard-card-layer discard-layer-one" />
         <span className="discard-card-layer discard-layer-two" />
         <span className="discard-card-layer discard-layer-three">
-          {topCard ? <CardFace card={topCard} compact /> : <span className="empty-discard-face">Empty</span>}
+          {topCard ? <CardFace card={topCard} compact hoverMode="none" noHoverScale /> : <span className="empty-discard-face">Empty</span>}
         </span>
         <strong>{count}</strong>
       </div>
@@ -830,7 +1012,7 @@ const TableDiscardPile = ({ cards = [], label = "Discard Pile", onOpen }) => {
   );
 };
 
-const CompletedGoalsPanel = ({ completedGoals = [], onOpen }) => {
+const CompletedGoalsPanel = ({ completedGoals = [], onOpen, onExpandGoal }) => {
   const topGoal = completedGoals[completedGoals.length - 1];
 
   return (
@@ -846,7 +1028,7 @@ const CompletedGoalsPanel = ({ completedGoals = [], onOpen }) => {
             {completedGoals.length > 1 && <span className="discard-card-layer discard-layer-two" />}
             <span className="discard-card-layer discard-layer-three">
               {topGoal
-                ? <CardFace card={topGoal} compact />
+                ? <CardFace card={topGoal} compact hoverMode="none" noHoverScale />
                 : <span className="empty-discard-face">Empty</span>}
             </span>
             <strong>{completedGoals.length}</strong>
@@ -857,10 +1039,15 @@ const CompletedGoalsPanel = ({ completedGoals = [], onOpen }) => {
         ) : (
           <div className="completed-goals-list">
             {completedGoals.map((goal, idx) => (
-              <div key={idx} className="completed-goal-entry">
+              <button
+                key={idx}
+                type="button"
+                className="completed-goal-entry completed-goal-button"
+                onClick={() => onExpandGoal(goal)}
+              >
                 <span className="completed-goal-name">{goal.name}</span>
                 <span className="completed-goal-pts">+{goal.pointsAwarded ?? goal.points ?? 1} pt</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -910,7 +1097,18 @@ const TablePlayerChip = ({ player, isCurrent, isMe = false }) => (
   </div>
 );
 
-const TableTopView = ({ players, me, currentPlayerName, meName, discardPile, deckCounts, onOpenCardDiscard, onOpenGoalDiscard }) => {
+const TableTopView = ({
+  players,
+  me,
+  currentPlayerName,
+  meName,
+  discardPile,
+  deckCounts,
+  canStoreDraggedResource,
+  onStoreResourceDrop,
+  onOpenCardDiscard,
+  onOpenGoalDiscard,
+}) => {
   const opponents = players.filter((p) => p.name !== meName);
   const colTemplate = `repeat(${Math.max(opponents.length, 1)}, 1fr)`;
 
@@ -947,8 +1145,26 @@ const TableTopView = ({ players, me, currentPlayerName, meName, discardPile, dec
         </div>
 
         {/* My storage zone */}
-        <div className={`tabletop-player-zone tabletop-me-zone${me?.name === currentPlayerName ? " tabletop-zone-current" : ""}`}>
+        <div
+          className={`tabletop-player-zone tabletop-me-zone${me?.name === currentPlayerName ? " tabletop-zone-current" : ""}${
+            canStoreDraggedResource ? " storage-drop-ready" : ""
+          }`}
+          onDragOver={(event) => {
+            if (!canStoreDraggedResource) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            if (!canStoreDraggedResource) return;
+            event.preventDefault();
+            const cardId =
+              event.dataTransfer.getData("application/x-mp-resource-card-id") ||
+              event.dataTransfer.getData("text/plain");
+            if (cardId) onStoreResourceDrop(cardId);
+          }}
+        >
           <p className="tabletop-zone-label">Your Storage</p>
+          {canStoreDraggedResource && <p className="storage-drop-hint">Drag resources here to store them.</p>}
           <StorageCards cards={me?.storage || []} />
         </div>
       </div>
@@ -1031,6 +1247,7 @@ const SeatingOrder = ({ players = [], currentPlayerName, meName, showScore = tru
 };
 
 const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, onClose, onConfirm }) => {
+  const requiresSingleTarget = card.key !== "absoluteCalamity";
   const [selectedTarget, setSelectedTarget] = useState(
     opponents.some((player) => player.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
   );
@@ -1038,6 +1255,21 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
   const [targetGoalIndex, setTargetGoalIndex] = useState(0);
   const [myGoalIndex, setMyGoalIndex] = useState(0);
+  const calamityTargets = useMemo(
+    () =>
+      card.key === "absoluteCalamity"
+        ? (gameState.players || [])
+            .map((player) => ({
+              ...player,
+              storage: (player.storage || []).filter((storedCard) => storedCard.type === "resource"),
+            }))
+            .filter((player) => player.storage.length > 0)
+        : [],
+    [card.key, gameState.players]
+  );
+  const [calamitySelections, setCalamitySelections] = useState(() =>
+    Object.fromEntries(calamityTargets.map((player) => [player.name, player.storage[0]?.id || ""]))
+  );
 
   const targetPlayer = gameState.players.find((player) => player.name === selectedTarget);
 
@@ -1047,10 +1279,29 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
     setTargetGoalIndex(0);
   }, [selectedTarget, targetPlayer?.storage]);
 
+  useEffect(() => {
+    if (card.key !== "absoluteCalamity") return;
+    setCalamitySelections((current) => {
+      const next = {};
+      calamityTargets.forEach((player) => {
+        next[player.name] = player.storage.some((storedCard) => storedCard.id === current[player.name])
+          ? current[player.name]
+          : player.storage[0]?.id || "";
+      });
+      return next;
+    });
+  }, [card.key, calamityTargets]);
+
   const confirm = () => {
-    const payload = { targetName: selectedTarget };
+    const payload = requiresSingleTarget ? { targetName: selectedTarget } : {};
     if (card.key === "theft") payload.storageCardId = selectedStorageCardId;
     if (card.key === "robbery") payload.handIndex = selectedHandIndex;
+    if (card.key === "absoluteCalamity") {
+      payload.calamityDiscards = calamityTargets.map((player) => ({
+        playerName: player.name,
+        cardId: calamitySelections[player.name],
+      }));
+    }
     if (card.key === "goalRemoval") payload.goalIndex = targetGoalIndex;
     if (card.key === "goalSwap") {
       payload.goalIndex = targetGoalIndex;
@@ -1060,9 +1311,11 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
   };
 
   const canConfirm = Boolean(
-    selectedTarget &&
+    (requiresSingleTarget ? selectedTarget : true) &&
       (card.key !== "theft" || selectedStorageCardId) &&
-      (card.key !== "robbery" || (targetPlayer?.handCount || 0) > 0)
+      (card.key !== "robbery" || (targetPlayer?.handCount || 0) > 0) &&
+      (card.key !== "absoluteCalamity" ||
+        (calamityTargets.length > 0 && calamityTargets.every((player) => calamitySelections[player.name])))
   );
 
   return (
@@ -1077,17 +1330,21 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
         </div>
         <p className="modal-description">{card.description}</p>
 
-        <label className="modal-label" htmlFor="action-target">Target player</label>
-        <select
-          id="action-target"
-          className="modal-select"
-          value={selectedTarget}
-          onChange={(event) => setSelectedTarget(event.target.value)}
-        >
-          {opponents.map((player) => (
-            <option key={player.name} value={player.name}>{player.name}</option>
-          ))}
-        </select>
+        {requiresSingleTarget && (
+          <>
+            <label className="modal-label" htmlFor="action-target">Target player</label>
+            <select
+              id="action-target"
+              className="modal-select"
+              value={selectedTarget}
+              onChange={(event) => setSelectedTarget(event.target.value)}
+            >
+              {opponents.map((player) => (
+                <option key={player.name} value={player.name}>{player.name}</option>
+              ))}
+            </select>
+          </>
+        )}
 
         {card.key === "theft" && (
           <div className="modal-picker-section">
@@ -1105,6 +1362,36 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
               ))}
               {(targetPlayer?.storage || []).length === 0 && <p className="empty-storage">No storage cards to steal.</p>}
             </div>
+          </div>
+        )}
+
+        {card.key === "absoluteCalamity" && (
+          <div className="modal-picker-section calamity-picker-section">
+            <h3>Choose one stored resource to discard from each player</h3>
+            {calamityTargets.length === 0 ? (
+              <p className="empty-storage">No one has resources in storage.</p>
+            ) : (
+              calamityTargets.map((player) => (
+                <div className="calamity-player-picker" key={player.name}>
+                  <h4>{player.name}</h4>
+                  <div className="selectable-card-grid">
+                    {player.storage.map((storedCard) => (
+                      <button
+                        key={storedCard.id}
+                        type="button"
+                        className={`selectable-card ${calamitySelections[player.name] === storedCard.id ? "selected" : ""}`}
+                        onClick={() =>
+                          setCalamitySelections((current) => ({ ...current, [player.name]: storedCard.id }))
+                        }
+                      >
+                        <CardFace card={storedCard} compact hoverMode="title" />
+                        <span>{storedCard.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -1172,20 +1459,30 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
   );
 };
 
-const TradeBuilderModal = ({ hand, opponents, defaultTargetName, onClose, onConfirm }) => {
-  const [selectedIds, setSelectedIds] = useState([]);
+const TradeBuilderModal = ({ hand, storage, opponents, defaultTargetName, onClose, onConfirm }) => {
+  const [selectedHandIds, setSelectedHandIds] = useState([]);
+  const [selectedStorageIds, setSelectedStorageIds] = useState([]);
   const [targetMode, setTargetMode] = useState("everyone");
   const [target, setTarget] = useState(
     opponents.some((player) => player.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
   );
   const [useBinding, setUseBinding] = useState(false);
 
-  const hasBinding = hand.some((card) => card.key === "bindingContract" && !selectedIds.includes(card.id));
+  const selectedCount = selectedHandIds.length + selectedStorageIds.length;
+  const hasBinding = hand.some((card) => card.key === "bindingContract" && !selectedHandIds.includes(card.id));
 
-  const toggleCard = (id) => {
-    setSelectedIds((ids) => {
+  const toggleHandCard = (id) => {
+    setSelectedHandIds((ids) => {
       if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (ids.length >= 4) return ids;
+      if (selectedCount >= 4) return ids;
+      return [...ids, id];
+    });
+  };
+
+  const toggleStorageCard = (id) => {
+    setSelectedStorageIds((ids) => {
+      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
+      if (selectedCount >= 4) return ids;
       return [...ids, id];
     });
   };
@@ -1200,6 +1497,10 @@ const TradeBuilderModal = ({ hand, opponents, defaultTargetName, onClose, onConf
           </div>
           <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
         </div>
+
+        <p className="trade-storage-note">
+          You can offer cards from your hand or storage. Offered storage cards go straight into the other player's storage if the trade completes.
+        </p>
 
         <div className="trade-target-row">
           <label>
@@ -1238,14 +1539,22 @@ const TradeBuilderModal = ({ hand, opponents, defaultTargetName, onClose, onConf
         </label>
 
         <h3>Select 0 to 4 cards to offer</h3>
-        <SelectableHandGrid hand={hand} selectedIds={selectedIds} onToggle={toggleCard} />
+        <SelectableOfferGrid
+          hand={hand}
+          storage={storage}
+          selectedHandIds={selectedHandIds}
+          selectedStorageIds={selectedStorageIds}
+          onToggleHand={toggleHandCard}
+          onToggleStorage={toggleStorageCard}
+        />
 
         <button
           className="gold-button modal-confirm-button"
           disabled={targetMode === "specific" && !target}
           onClick={() => onConfirm({
             targetName: targetMode === "specific" ? target : "",
-            cardIds: selectedIds,
+            cardIds: selectedHandIds,
+            storageCardIds: selectedStorageIds,
             useBinding,
           })}
         >
@@ -1256,12 +1565,23 @@ const TradeBuilderModal = ({ hand, opponents, defaultTargetName, onClose, onConf
   );
 };
 
-const TradeResponseModal = ({ hand, trade, onClose, onConfirm }) => {
-  const [selectedIds, setSelectedIds] = useState([]);
-  const toggleCard = (id) => {
-    setSelectedIds((ids) => {
+const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm }) => {
+  const [selectedHandIds, setSelectedHandIds] = useState([]);
+  const [selectedStorageIds, setSelectedStorageIds] = useState([]);
+  const selectedCount = selectedHandIds.length + selectedStorageIds.length;
+
+  const toggleHandCard = (id) => {
+    setSelectedHandIds((ids) => {
       if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (ids.length >= 4) return ids;
+      if (selectedCount >= 4) return ids;
+      return [...ids, id];
+    });
+  };
+
+  const toggleStorageCard = (id) => {
+    setSelectedStorageIds((ids) => {
+      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
+      if (selectedCount >= 4) return ids;
       return [...ids, id];
     });
   };
@@ -1277,11 +1597,24 @@ const TradeResponseModal = ({ hand, trade, onClose, onConfirm }) => {
           <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
         </div>
 
+        {trade.bindingUsed && (
+          <p className="binding-contract-alert">
+            {trade.initiatorName} used Binding Contract on this trade. If the trade is accepted, no one can use It's a Scam.
+          </p>
+        )}
+
         <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
         <h3>Select 0 to 4 cards to offer back</h3>
-        <SelectableHandGrid hand={hand} selectedIds={selectedIds} onToggle={toggleCard} />
+        <SelectableOfferGrid
+          hand={hand}
+          storage={storage}
+          selectedHandIds={selectedHandIds}
+          selectedStorageIds={selectedStorageIds}
+          onToggleHand={toggleHandCard}
+          onToggleStorage={toggleStorageCard}
+        />
 
-        <button className="gold-button modal-confirm-button" onClick={() => onConfirm({ cardIds: selectedIds })}>
+        <button className="gold-button modal-confirm-button" onClick={() => onConfirm({ cardIds: selectedHandIds, storageCardIds: selectedStorageIds })}>
           Send Response
         </button>
       </section>
@@ -1289,21 +1622,176 @@ const TradeResponseModal = ({ hand, trade, onClose, onConfirm }) => {
   );
 };
 
-const SelectableHandGrid = ({ hand, selectedIds, onToggle }) => (
-  <div className="selectable-card-grid trade-select-grid">
-    {hand.map((card) => (
-      <button
-        key={card.id}
-        type="button"
-        className={`selectable-card ${selectedIds.includes(card.id) ? "selected" : ""}`}
-        onClick={() => onToggle(card.id)}
-      >
-        <CardFace card={card} compact />
-        <span>{card.name}</span>
-      </button>
-    ))}
+const SelectableOfferGrid = ({ hand, storage, selectedHandIds, selectedStorageIds, onToggleHand, onToggleStorage }) => (
+  <div className="trade-offer-picker">
+    <div>
+      <h4>Hand</h4>
+      <div className="selectable-card-grid trade-select-grid">
+        {hand.map((card) => (
+          <button
+            key={card.id}
+            type="button"
+            className={`selectable-card ${selectedHandIds.includes(card.id) ? "selected" : ""}`}
+            onClick={() => onToggleHand(card.id)}
+          >
+            <CardFace card={card} compact hoverMode={card.type === "resource" ? "title" : "none"} />
+            <span>{card.name}</span>
+          </button>
+        ))}
+        {hand.length === 0 && <p className="empty-storage">No cards in hand.</p>}
+      </div>
+    </div>
+    <div>
+      <h4>Storage</h4>
+      <div className="selectable-card-grid trade-select-grid">
+        {storage.map((card) => (
+          <button
+            key={card.id}
+            type="button"
+            className={`selectable-card ${selectedStorageIds.includes(card.id) ? "selected" : ""}`}
+            onClick={() => onToggleStorage(card.id)}
+          >
+            <CardFace card={card} compact hoverMode="title" />
+            <span>{card.name}</span>
+          </button>
+        ))}
+        {storage.length === 0 && <p className="empty-storage">No stored cards.</p>}
+      </div>
+    </div>
   </div>
 );
+
+const ActionReadyModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
+  const actionCards = hand.filter((card) => card.type === "action");
+  const [selectedIds, setSelectedIds] = useState(() => actionCards.slice(0, 7).map((card) => card.id));
+
+  const toggleCard = (id) => {
+    setSelectedIds((ids) => {
+      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
+      if (ids.length >= 7) return ids;
+      return [...ids, id];
+    });
+  };
+
+  const hasEnoughActions = actionCards.length >= 7;
+  const canConfirm = hasEnoughActions && selectedIds.length === 7;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="action-ready-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Special completion</p>
+            <h2>{goal.name}</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+        </div>
+
+        <p className="modal-description">
+          Select exactly 7 action cards to reveal to everyone. These cards stay in your hand.
+        </p>
+
+        {!hasEnoughActions && (
+          <p className="danger-note">You need at least 7 action cards in hand to complete Action-Ready.</p>
+        )}
+
+        <div className="action-ready-count-row">
+          <span>{selectedIds.length} / 7 selected</span>
+          <span>{actionCards.length} action cards available</span>
+        </div>
+
+        <div className="selectable-card-grid action-ready-grid">
+          {actionCards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              className={`selectable-card action-ready-selectable ${selectedIds.includes(card.id) ? "selected" : ""}`}
+              onClick={() => toggleCard(card.id)}
+              disabled={!selectedIds.includes(card.id) && selectedIds.length >= 7}
+            >
+              <CardFace card={card} compact hoverMode="none" />
+              <span>{card.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          className="gold-button modal-confirm-button"
+          disabled={!canConfirm}
+          onClick={() => onConfirm({ goalIndex, actionCardIds: selectedIds })}
+        >
+          Reveal 7 Actions
+        </button>
+      </section>
+    </div>
+  );
+};
+
+const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
+  const actionCards = hand.filter((card) => card.type === "action");
+  const [selectedIds, setSelectedIds] = useState(() => actionCards.slice(0, 4).map((card) => card.id));
+
+  const toggleCard = (id) => {
+    setSelectedIds((ids) => {
+      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
+      if (ids.length >= 4) return ids;
+      return [...ids, id];
+    });
+  };
+
+  const hasEnoughActions = actionCards.length >= 4;
+  const canConfirm = hasEnoughActions && selectedIds.length === 4;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="action-ready-modal meditator-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Special completion</p>
+            <h2>{goal.name}</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+        </div>
+
+        <p className="modal-description">
+          Select exactly 4 action cards to discard. These cards go to the discard pile, and Meditator scores 3 points only if all 4 are valid action cards.
+        </p>
+
+        {!hasEnoughActions && (
+          <p className="danger-note">You need at least 4 action cards in hand to complete Meditator.</p>
+        )}
+
+        <div className="action-ready-count-row">
+          <span>{selectedIds.length} / 4 selected</span>
+          <span>{actionCards.length} action cards available</span>
+        </div>
+
+        <div className="selectable-card-grid action-ready-grid">
+          {actionCards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              className={`selectable-card action-ready-selectable ${selectedIds.includes(card.id) ? "selected" : ""}`}
+              onClick={() => toggleCard(card.id)}
+              disabled={!selectedIds.includes(card.id) && selectedIds.length >= 4}
+            >
+              <CardFace card={card} compact hoverMode="none" />
+              <span>{card.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          className="danger-button modal-confirm-button"
+          disabled={!canConfirm}
+          onClick={() => onConfirm({ goalIndex, actionCardIds: selectedIds })}
+        >
+          Discard 4 Actions
+        </button>
+      </section>
+    </div>
+  );
+};
 
 const InvestorModal = ({
   goal,
@@ -1425,9 +1913,8 @@ const MiniMoneyCard = ({ card, selected = false, onClick, draggable = false, onD
     title={selected ? "Click to remove." : "Drag or click to invest."}
   >
     {getCardImage(card) ? <img src={getCardImage(card)} alt={card.name} /> : <span>{card.name}</span>}
-    <span className="hover-card-details">
+    <span className="hover-card-details hover-card-title-only">
       <strong>{card.name}</strong>
-      <small>{card.description || "Money resource."}</small>
     </span>
   </button>
 );
@@ -1448,7 +1935,7 @@ const DiscardPileStack = ({ playingCards = [], goalCards = [], onOpen }) => {
         <span className="discard-card-layer discard-layer-one" />
         <span className="discard-card-layer discard-layer-two" />
         <span className="discard-card-layer discard-layer-three">
-          {topCard ? <CardFace card={topCard} compact /> : <span className="empty-discard-face">Discard</span>}
+          {topCard ? <CardFace card={topCard} compact hoverMode="none" noHoverScale /> : <span className="empty-discard-face">Discard</span>}
         </span>
         <strong>{count}</strong>
       </button>
@@ -1461,10 +1948,10 @@ const DiscardPileStack = ({ playingCards = [], goalCards = [], onOpen }) => {
   );
 };
 
-const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard Pile", onClose }) => {
+const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard Pile", onClose, onExpandGoal }) => {
   const combined = [
-    ...playingCards.map((card) => ({ ...card, pileLabel: "Playing discard" })),
-    ...goalCards.map((card) => ({ ...card, pileLabel: "Goal discard" })),
+    ...playingCards.map((card) => ({ ...card, pileLabel: "Playing discard", isGoalCard: false })),
+    ...goalCards.map((card) => ({ ...card, pileLabel: "Goal discard", isGoalCard: true })),
   ].reverse();
 
   return (
@@ -1478,7 +1965,15 @@ const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard 
           <div className="discard-modal-grid">
             {combined.map((card) => (
               <article className="discard-modal-card" key={`${card.pileLabel}-${card.id}`}>
-                <CardFace card={card} compact />
+                <CardFace
+                  card={card}
+                  compact
+                  className={!card.isGoalCard && card.type === "action" ? "discard-action-card-face" : ""}
+                  hoverMode={card.isGoalCard ? "expand" : card.type === "action" ? "none" : undefined}
+                  hoverButtonLabel="Expand"
+                  onHoverButtonClick={card.isGoalCard ? () => onExpandGoal?.(card) : undefined}
+                  noHoverScale={card.isGoalCard}
+                />
               </article>
             ))}
           </div>
@@ -1527,28 +2022,61 @@ const MagicHandChoiceModal = ({ choice, onConfirm }) => {
   );
 };
 
-const OracleRevealModal = ({ reveal, onClose }) => (
-  <div className="modal-backdrop" onClick={onClose}>
-    <section className="discard-modal oracle-reveal-modal" onClick={(event) => event.stopPropagation()}>
-      <div className="modal-heading">
-        <div>
-          <p className="eyebrow">Oracle's Power</p>
-          <h2>{reveal.targetName}'s Hand</h2>
+
+const ExpandedGoalCardModal = ({ card, onClose }) => {
+  const image = getCardImage(card);
+  const title = card?.name || titleCase(card?.key || "Goal Card");
+
+  return (
+    <div className="modal-backdrop expanded-goal-backdrop" onClick={onClose}>
+      <section className="expanded-goal-modal" onClick={(event) => event.stopPropagation()}>
+        <button className="ghost-button close-modal-button expanded-goal-close" onClick={onClose}>✕</button>
+        <div className="expanded-goal-image-wrap">
+          {image ? <img src={image} alt={title} /> : <div className="card-fallback">{title}</div>}
         </div>
-        <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
-      </div>
-      {(reveal.cards || []).length === 0 ? (
-        <p className="empty-storage">That player has no cards in hand.</p>
-      ) : (
-        <div className="discard-modal-grid oracle-hand-grid">
-          {reveal.cards.map((card) => (
-            <article className="discard-modal-card" key={card.id}>
-              <CardFace card={card} compact />
-              <span>{card.name}</span>
-            </article>
-          ))}
+        <div className="expanded-goal-details">
+          <p className="eyebrow">Goal Card</p>
+          <h2>{title}</h2>
+          <p>{card?.description || "Read the enlarged card to check this goal."}</p>
+          <strong>{card?.key === "investor" ? "Variable points" : `${card?.points || 1} point${(card?.points || 1) === 1 ? "" : "s"}`}</strong>
         </div>
-      )}
-    </section>
-  </div>
-);
+      </section>
+    </div>
+  );
+};
+
+const RevealModal = ({ reveal, onClose }) => {
+  const isActionReady = reveal.type === "actionReadyReveal";
+  const title = isActionReady ? `${reveal.actorName} completed Action-Ready` : `${reveal.targetName}'s Hand`;
+  const eyebrow = isActionReady ? "Goal completed" : "Oracle's Power";
+  const emptyText = isActionReady ? "No action cards were revealed." : "That player has no cards in hand.";
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="discard-modal oracle-reveal-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h2>{title}</h2>
+          </div>
+          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+        </div>
+        {isActionReady && (
+          <p className="modal-description">{reveal.actorName} revealed 7 action cards to complete the task Action-Ready.</p>
+        )}
+        {(reveal.cards || []).length === 0 ? (
+          <p className="empty-storage">{emptyText}</p>
+        ) : (
+          <div className="discard-modal-grid oracle-hand-grid">
+            {reveal.cards.map((card) => (
+              <article className="discard-modal-card" key={card.id}>
+                <CardFace card={card} compact hoverMode={isActionReady ? "none" : undefined} />
+                <span>{card.name}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
