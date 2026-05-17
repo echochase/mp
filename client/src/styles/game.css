@@ -680,10 +680,16 @@ button:disabled {
 
 .storage-card-grid {
   display: grid;
+  width: 100%;
   grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
   gap: 9px;
   text-align: left;
   overflow: visible;
+}
+
+.storage-card-grid > .empty-storage {
+  grid-column: 1 / -1;
+  text-align: center;
 }
 
 .compact-storage-cards {
