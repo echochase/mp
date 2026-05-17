@@ -7105,3 +7105,78 @@ button:disabled {
     margin: 0 !important;
   }
 }
+
+/* Round 22: mobile opponent-row placeholder and cleaner small-name wrapping. */
+.tabletop-empty-seat-slot {
+  display: none;
+}
+
+.card-fallback,
+.hover-card-details strong,
+.hover-card-title-only strong,
+.goal-meta p,
+.completed-goal-name,
+.discard-modal-card span,
+.magic-hand-confirm-row span {
+  hyphens: manual;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 760px) {
+  .tabletop-empty-seat-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 5px;
+    border: 1px dashed rgba(201, 168, 76, 0.32);
+    border-radius: 10px;
+    background: rgba(201, 168, 76, 0.045);
+    color: rgba(229, 213, 162, 0.68);
+    font-family: 'Cinzel', serif;
+    font-size: 0.47rem;
+    letter-spacing: 0.055em;
+    line-height: 1.15;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .tabletop-empty-seat-slot span {
+    max-width: 78px;
+  }
+
+  .mobile-table-dashboard .goal-meta,
+  .mobile-table-dashboard .compact-goal-meta {
+    align-self: center !important;
+    justify-self: center !important;
+    width: 100% !important;
+    text-align: center !important;
+  }
+
+  .mobile-table-dashboard .goal-meta p {
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+    hyphens: manual !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+
+  .mobile-table-dashboard .compact-goal-actions {
+    display: flex !important;
+    align-self: center !important;
+    justify-self: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .mobile-table-dashboard .compact-goal-actions button,
+  .mobile-table-dashboard .reroll-goal-button {
+    width: auto !important;
+    min-width: 48px !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+  }
+}

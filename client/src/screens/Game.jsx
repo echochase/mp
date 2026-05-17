@@ -74,6 +74,17 @@ const titleCase = (value = "") =>
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const SOFT_HYPHEN = "\u00AD";
+
+const hyphenateLongWords = (value = "", chunkSize = 7) =>
+  String(value)
+    .split(/(\s+)/)
+    .map((part) => {
+      if (/^\s+$/.test(part) || part.length <= chunkSize) return part;
+      return part.match(new RegExp(`.{1,${chunkSize}}`, "g"))?.join(SOFT_HYPHEN) || part;
+    })
+    .join("");
+
 const normalizeImageLookupKey = (value = "") =>
   String(value)
     .replace(/\.[^/.]+$/, "")
@@ -915,6 +926,7 @@ const CardFace = ({
 }) => {
   const image = getCardImage(card);
   const cardTitle = card?.name || titleCase(card?.key || "Card");
+  const cardDisplayTitle = hyphenateLongWords(cardTitle);
   const effectiveHoverMode = hoverMode || (card?.type === "resource" ? "title" : "details");
 
   const handleHoverButtonClick = (event) => {
@@ -943,14 +955,14 @@ const CardFace = ({
     if (effectiveHoverMode === "title") {
       return (
         <span className="hover-card-details hover-card-title-only">
-          <strong>{cardTitle}</strong>
+          <strong>{cardDisplayTitle}</strong>
         </span>
       );
     }
 
     return (
       <span className="hover-card-details">
-        <strong>{cardTitle}</strong>
+        <strong>{cardDisplayTitle}</strong>
         <small>{card?.description || "No description available."}</small>
       </span>
     );
@@ -962,7 +974,7 @@ const CardFace = ({
       aria-label={cardTitle}
       onClick={onClick}
     >
-      {image ? <img src={image} alt={cardTitle} /> : <div className="card-fallback">{cardTitle}</div>}
+      {image ? <img src={image} alt={cardTitle} /> : <div className="card-fallback">{cardDisplayTitle}</div>}
       {renderHoverLayer()}
     </div>
   );
@@ -1325,7 +1337,7 @@ const GoalCard = ({
         <strong>
           {isInvestor ? "Variable" : `${goal.points || 1} pt${(goal.points || 1) === 1 ? "" : "s"}`}
         </strong>
-        <p>{goal.name}</p>
+        <p>{hyphenateLongWords(goal.name)}</p>
       </div>
       <div className="goal-actions compact-goal-actions">
         {isInvestor && (
@@ -1423,7 +1435,7 @@ const CompletedGoalsPanel = ({ completedGoals = [], onOpen, onExpandGoal }) => {
                 className="completed-goal-entry completed-goal-button"
                 onClick={() => onExpandGoal(goal)}
               >
-                <span className="completed-goal-name">{goal.name}</span>
+                <span className="completed-goal-name">{hyphenateLongWords(goal.name)}</span>
                 <span className="completed-goal-pts">+{goal.pointsAwarded ?? goal.points ?? 1} pt</span>
               </button>
             ))}
@@ -1671,6 +1683,7 @@ const TableTopView = ({
   const [isPlaySpaceDragOver, setIsPlaySpaceDragOver] = useState(false);
   const [isStorageDragOver, setIsStorageDragOver] = useState(false);
   const opponents = players.filter((p) => p.name !== meName);
+  const hasOddOpponentSlot = opponents.length > 0 && opponents.length % 2 === 1;
   const colTemplate = `repeat(${Math.max(opponents.length, 1)}, 1fr)`;
   const opponentZonesClassName = [
     "tabletop-zones-row tabletop-opponent-zones",
@@ -1701,6 +1714,11 @@ const TableTopView = ({
               <StorageCards cards={player.storage} compact />
             </div>
           ))}
+          {hasOddOpponentSlot && (
+            <div className="tabletop-empty-seat-slot">
+              <span>Another player would fit here</span>
+            </div>
+          )}
         </div>
 
         {/* Table centre — draw deck + two discard piles */}
@@ -2597,9 +2615,9 @@ const MiniMoneyCard = ({ card, selected = false, onClick, draggable = false, onD
     onClick={onClick}
     title={selected ? "Click to remove." : "Drag or click to invest."}
   >
-    {getCardImage(card) ? <img src={getCardImage(card)} alt={card.name} /> : <span>{card.name}</span>}
+    {getCardImage(card) ? <img src={getCardImage(card)} alt={card.name} /> : <span>{hyphenateLongWords(card.name)}</span>}
     <span className="hover-card-details hover-card-title-only">
-      <strong>{card.name}</strong>
+      <strong>{hyphenateLongWords(card.name)}</strong>
     </span>
   </button>
 );
@@ -2653,7 +2671,7 @@ const CombinedDiscardModal = ({ playingCards = [], goalCards = [], onClose, onEx
                   onClick={card.isGoalCard ? () => { if (isMobileTableViewport()) onExpandGoal?.(card); } : undefined}
                   noHoverScale={card.isGoalCard}
                 />
-                <span>{card.name}</span>
+                <span>{hyphenateLongWords(card.name)}</span>
               </article>
             ))}
           </div>
@@ -2750,11 +2768,11 @@ const ExpandedGoalCardModal = ({ card, onClose }) => {
       <section className="expanded-goal-modal" onClick={(event) => event.stopPropagation()}>
         <button className="ghost-button close-modal-button expanded-goal-close desktop-modal-close-button" onClick={onClose}>✕</button>
         <div className="expanded-goal-image-wrap">
-          {image ? <img src={image} alt={title} /> : <div className="card-fallback">{title}</div>}
+          {image ? <img src={image} alt={title} /> : <div className="card-fallback">{hyphenateLongWords(title)}</div>}
         </div>
         <div className="expanded-goal-details">
           <p className="eyebrow">Goal Card</p>
-          <h2>{title}</h2>
+          <h2>{hyphenateLongWords(title)}</h2>
           <p>{card?.description || "Read the enlarged card to check this goal."}</p>
           <strong>{card?.key === "investor" ? "Variable points" : `${card?.points || 1} point${(card?.points || 1) === 1 ? "" : "s"}`}</strong>
         </div>
@@ -2778,7 +2796,7 @@ const RevealModal = ({ reveal, onClose }) => {
         <div className="modal-heading">
           <div>
             <p className="eyebrow">{eyebrow}</p>
-            <h2>{title}</h2>
+            <h2>{hyphenateLongWords(title)}</h2>
           </div>
           <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
@@ -2792,7 +2810,7 @@ const RevealModal = ({ reveal, onClose }) => {
             {reveal.cards.map((card) => (
               <article className="discard-modal-card" key={card.id}>
                 <CardFace card={card} compact hoverMode={isActionReady ? "none" : undefined} />
-                <span>{card.name}</span>
+                <span>{hyphenateLongWords(card.name)}</span>
               </article>
             ))}
           </div>
