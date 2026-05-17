@@ -1355,6 +1355,23 @@ button:disabled {
   align-items: start;
 }
 
+.partitioned-trade-offer-box {
+  display: grid;
+  gap: 9px;
+}
+
+.trade-offer-zone {
+  display: grid;
+  gap: 5px;
+}
+
+.trade-offer-zone-label {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .scam-window-row {
   display: flex;
   justify-content: space-between;
@@ -6677,7 +6694,8 @@ button:disabled {
   .action-modal .selectable-card-grid,
   .trade-modal .selectable-card-grid,
   .action-ready-grid,
-  .calamity-picker-section .selectable-card-grid {
+  .calamity-picker-section .selectable-card-grid,
+  .sabotage-picker-section .selectable-card-grid {
     max-height: min(34dvh, 250px) !important;
     overflow-y: auto !important;
     padding-right: 2px !important;

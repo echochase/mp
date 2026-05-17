@@ -12,23 +12,29 @@ const goalCardImages = import.meta.glob("/src/assets/goal-cards/*.{png,jpg,jpeg,
   import: "default",
 });
 
-const imageMap = Object.entries({ ...playingCardImages, ...goalCardImages }).reduce(
-  (acc, [path, src]) => {
-    const key = path
-      .split("/")
-      .pop()
-      .replace(/\.[^/.]+$/, "");
-    acc[key] = src;
-    return acc;
-  },
-  {}
-);
+const buildImageMap = (modules) =>
+  Object.entries(modules).reduce(
+    (acc, [path, src]) => {
+      const key = path
+        .split("/")
+        .pop()
+        .replace(/\.[^/.]+$/, "");
+      acc[key] = src;
+      return acc;
+    },
+    {}
+  );
+
+const playingImageMap = buildImageMap(playingCardImages);
+const goalImageMap = buildImageMap(goalCardImages);
+const imageMap = { ...goalImageMap, ...playingImageMap };
 
 const STANDARD_RESOURCE_ORDER = ["workforce", "candy", "money", "wood", "land", "steel"];
 const SPECIAL_RESOURCE_ORDER = ["gold", "diamond"];
 const CANCEL_REACTION_KEYS = ["iThinkNot", "absolutelyNot"];
 const TRADE_TOOL_KEYS = ["itsAScam", "bindingContract"];
-const TARGETED_ACTION_KEYS = ["theft", "robbery", "goalRemoval", "goalSwap", "oraclesPower", "absoluteCalamity"];
+const TARGETED_ACTION_KEYS = ["theft", "sabotage", "robbery", "goalRemoval", "goalSwap", "oraclesPower", "absoluteCalamity"];
+const SABOTAGE_PROTECTED_KEYS = ["gold", "diamond"];
 
 const AVATAR_COLORS = [
   "#7c3aed",
@@ -74,15 +80,28 @@ const normalizeImageLookupKey = (value = "") =>
     .replace(/[^a-z0-9]/gi, "")
     .toLowerCase();
 
-const normalizedImageMap = Object.entries(imageMap).reduce((acc, [key, src]) => {
-  acc[normalizeImageLookupKey(key)] = src;
-  return acc;
-}, {});
+const buildNormalizedImageMap = (map) =>
+  Object.entries(map).reduce((acc, [key, src]) => {
+    acc[normalizeImageLookupKey(key)] = src;
+    return acc;
+  }, {});
+
+const normalizedPlayingImageMap = buildNormalizedImageMap(playingImageMap);
+const normalizedGoalImageMap = buildNormalizedImageMap(goalImageMap);
+const normalizedImageMap = buildNormalizedImageMap(imageMap);
 
 const getCardImage = (card) => {
   const directKey = card?.key || card?.imageKey;
   const directName = card?.name || card?.title;
+  const isGoalCard = card?.type === "goal" || card?.points !== undefined || card?.requirement || card?.anyRequirement || card?.specialCompletion;
+  const primaryMap = isGoalCard ? goalImageMap : playingImageMap;
+  const primaryNormalizedMap = isGoalCard ? normalizedGoalImageMap : normalizedPlayingImageMap;
+
   return (
+    primaryMap[directKey] ||
+    primaryMap[directName] ||
+    primaryNormalizedMap[normalizeImageLookupKey(directKey)] ||
+    primaryNormalizedMap[normalizeImageLookupKey(directName)] ||
     imageMap[directKey] ||
     imageMap[directName] ||
     normalizedImageMap[normalizeImageLookupKey(directKey)] ||
@@ -119,6 +138,9 @@ const sortCards = (a, b) => {
   return (a?.name || "").localeCompare(b?.name || "");
 };
 
+const canSabotageDiscard = (card) =>
+  Boolean(card?.type === "resource" && !SABOTAGE_PROTECTED_KEYS.includes(card.key));
+
 const groupCardsByKey = (cards = []) => {
   const groups = new Map();
   cards.forEach((card) => {
@@ -134,6 +156,16 @@ const groupCardsByKey = (cards = []) => {
 const formatCountdown = (targetTime, now) => {
   if (!targetTime) return "0.0s";
   return `${Math.max(0, (targetTime - now) / 1000).toFixed(1)}s`;
+};
+
+const getPendingActionContext = (pendingAction) => {
+  if (pendingAction?.counterTargetName) {
+    return ` while countering ${pendingAction.counterTargetName}${
+      pendingAction.counterTargetActorName ? ` from ${pendingAction.counterTargetActorName}` : ""
+    }`;
+  }
+  if (pendingAction?.targetName) return ` against ${pendingAction.targetName}`;
+  return "";
 };
 
 const isMobileTableViewport = () =>
@@ -290,6 +322,57 @@ useEffect(
   );
 
   const tableLocked = Boolean(gameState?.pendingAction || gameState?.activeTrade || gameState?.pendingChoice || me?.pendingChoice);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
+
+      let handled = true;
+      if (actionModalCard) setActionModalCard(null);
+      else if (tradeResponseOpen) setTradeResponseOpen(false);
+      else if (tradeBuilderOpen) setTradeBuilderOpen(false);
+      else if (investorGoal) setInvestorGoal(null);
+      else if (actionReadyGoal) setActionReadyGoal(null);
+      else if (meditatorGoal) setMeditatorGoal(null);
+      else if (expandedGoalCard) setExpandedGoalCard(null);
+      else if (expandedStoragePlayer) setExpandedStoragePlayer(null);
+      else if (completedGoalsPileOpen) setCompletedGoalsPileOpen(false);
+      else if (combinedDiscardOpen) setCombinedDiscardOpen(false);
+      else if (goalDiscardPileOpen) setGoalDiscardPileOpen(false);
+      else if (discardPileOpen) setDiscardPileOpen(false);
+      else if (tableLogOpen) setTableLogOpen(false);
+      else if (seatingOrderOpen) setSeatingOrderOpen(false);
+      else if (activeReveal) {
+        setDismissedRevealIds((ids) => new Set([...ids, activeReveal.id]));
+      } else {
+        handled = false;
+      }
+
+      if (handled) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [
+    actionModalCard,
+    tradeResponseOpen,
+    tradeBuilderOpen,
+    investorGoal,
+    actionReadyGoal,
+    meditatorGoal,
+    expandedGoalCard,
+    expandedStoragePlayer,
+    completedGoalsPileOpen,
+    combinedDiscardOpen,
+    goalDiscardPileOpen,
+    discardPileOpen,
+    tableLogOpen,
+    seatingOrderOpen,
+    activeReveal,
+  ]);
 
   const playCard = (card, extraPayload = {}) => {
     socket.emit("play-card", roomCode, { cardIndex: card.originalIndex, ...extraPayload });
@@ -1078,7 +1161,7 @@ const PendingActionPanel = ({ pendingAction, me, now, onReact, hand }) => {
         <h2>{pendingAction.actorName} played {pendingAction.card.name}</h2>
         <p>
           Resolves in <strong>{formatCountdown(pendingAction.expiresAt, now)}</strong>
-          {pendingAction.targetName ? ` against ${pendingAction.targetName}` : ""}.
+          {getPendingActionContext(pendingAction)}.
         </p>
       </div>
       <CardFace card={pendingAction.card} compact />
@@ -1126,8 +1209,8 @@ const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, onDecline
       )}
 
       <div className="trade-offers-grid">
-        <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
-        <TradeOffer title={trade.responderName ? `${trade.responderName} offers` : "Waiting for response"} cards={trade.responderOffer} />
+        <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} handCards={trade.initiatorOfferHand} storageCards={trade.initiatorOfferStorage} />
+        <TradeOffer title={trade.responderName ? `${trade.responderName} offers` : "Waiting for response"} cards={trade.responderOffer} handCards={trade.responderOfferHand} storageCards={trade.responderOfferStorage} />
       </div>
 
       {isScamWindow && (
@@ -1152,18 +1235,52 @@ const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, onDecline
   );
 };
 
-const TradeOffer = ({ title, cards = [] }) => (
-  <div className="trade-offer-box">
-    <strong>{title}</strong>
-    <div className="trade-card-row">
-      {cards.length === 0 ? (
-        <span className="empty-storage">Nothing</span>
-      ) : (
-        cards.map((card) => <CardFace key={card.id} card={card} compact />)
-      )}
+const TradeOffer = ({ title, cards = [], handCards, storageCards }) => {
+  const hasPartition = Boolean(handCards || storageCards || cards.some((card) => card.tradeZone));
+  const handOffer = handCards || cards.filter((card) => card.tradeZone === "hand");
+  const storageOffer = storageCards || cards.filter((card) => card.tradeZone === "storage");
+
+  if (!hasPartition) {
+    return (
+      <div className="trade-offer-box">
+        <strong>{title}</strong>
+        <div className="trade-card-row">
+          {cards.length === 0 ? (
+            <span className="empty-storage">Nothing</span>
+          ) : (
+            cards.map((card) => <CardFace key={card.id} card={card} compact />)
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="trade-offer-box partitioned-trade-offer-box">
+      <strong>{title}</strong>
+      <div className="trade-offer-zone">
+        <span className="trade-offer-zone-label">To hand</span>
+        <div className="trade-card-row">
+          {handOffer.length === 0 ? (
+            <span className="empty-storage">Nothing</span>
+          ) : (
+            handOffer.map((card) => <CardFace key={card.id} card={card} compact />)
+          )}
+        </div>
+      </div>
+      <div className="trade-offer-zone">
+        <span className="trade-offer-zone-label">To storage</span>
+        <div className="trade-card-row">
+          {storageOffer.length === 0 ? (
+            <span className="empty-storage">Nothing</span>
+          ) : (
+            storageOffer.map((card) => <CardFace key={card.id} card={card} compact />)
+          )}
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const GoalCard = ({
   goal,
@@ -1497,7 +1614,7 @@ const MobilePendingActionInPlaySpace = ({ pendingAction, me, now, reactionHand =
       <div className="mobile-pending-action-copy">
         <span>Reaction window</span>
         <strong>{pendingAction.actorName} played {pendingAction.card.name}</strong>
-        <small>{formatCountdown(pendingAction.expiresAt, now)} remaining</small>
+        <small>{formatCountdown(pendingAction.expiresAt, now)} remaining{getPendingActionContext(pendingAction)}</small>
       </div>
       <div className="mobile-pending-action-card-wrap">
         <CardFace card={pendingAction.card} compact hoverMode="none" noHoverScale />
@@ -1765,6 +1882,7 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
     opponents.some((player) => player.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
   );
   const [selectedStorageCardId, setSelectedStorageCardId] = useState("");
+  const [sabotageStorageCardIds, setSabotageStorageCardIds] = useState([]);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
   const [targetGoalIndex, setTargetGoalIndex] = useState(0);
   const [myGoalIndex, setMyGoalIndex] = useState(0);
@@ -1785,9 +1903,11 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
   );
 
   const targetPlayer = gameState.players.find((player) => player.name === selectedTarget);
+  const sabotageCards = (targetPlayer?.storage || []).filter(canSabotageDiscard);
 
   useEffect(() => {
     setSelectedStorageCardId(targetPlayer?.storage?.[0]?.id || "");
+    setSabotageStorageCardIds([]);
     setSelectedHandIndex(0);
     setTargetGoalIndex(0);
   }, [selectedTarget, targetPlayer?.storage]);
@@ -1805,9 +1925,18 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
     });
   }, [card.key, calamityTargets]);
 
+  const toggleSabotageCard = (cardId) => {
+    setSabotageStorageCardIds((ids) => {
+      if (ids.includes(cardId)) return ids.filter((selectedId) => selectedId !== cardId);
+      if (ids.length >= 2) return ids;
+      return [...ids, cardId];
+    });
+  };
+
   const confirm = () => {
     const payload = requiresSingleTarget ? { targetName: selectedTarget } : {};
     if (card.key === "theft") payload.storageCardId = selectedStorageCardId;
+    if (card.key === "sabotage") payload.sabotageCardIds = sabotageStorageCardIds;
     if (card.key === "robbery") payload.handIndex = selectedHandIndex;
     if (card.key === "absoluteCalamity") {
       payload.calamityDiscards = calamityTargets.map((player) => ({
@@ -1826,6 +1955,7 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
   const canConfirm = Boolean(
     (requiresSingleTarget ? selectedTarget : true) &&
       (card.key !== "theft" || selectedStorageCardId) &&
+      (card.key !== "sabotage" || (sabotageStorageCardIds.length > 0 && sabotageStorageCardIds.length <= 2)) &&
       (card.key !== "robbery" || (targetPlayer?.handCount || 0) > 0) &&
       (card.key !== "absoluteCalamity" ||
         (calamityTargets.length > 0 && calamityTargets.every((player) => calamitySelections[player.name])))
@@ -1874,6 +2004,30 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
                 </button>
               ))}
               {(targetPlayer?.storage || []).length === 0 && <p className="empty-storage">No storage cards to steal.</p>}
+            </div>
+          </div>
+        )}
+
+        {card.key === "sabotage" && (
+          <div className="modal-picker-section sabotage-picker-section">
+            <h3>Choose 1 or 2 stored cards to discard</h3>
+            <p className="modal-description">Pick them in discard order. Gold and Diamond are protected.</p>
+            <div className="selectable-card-grid">
+              {sabotageCards.map((storedCard) => {
+                const selectedOrder = sabotageStorageCardIds.indexOf(storedCard.id);
+                return (
+                  <button
+                    key={storedCard.id}
+                    type="button"
+                    className={`selectable-card ${selectedOrder >= 0 ? "selected" : ""}`}
+                    onClick={() => toggleSabotageCard(storedCard.id)}
+                  >
+                    <CardFace card={storedCard} compact hoverMode="title" />
+                    <span>{selectedOrder >= 0 ? `Discard ${selectedOrder + 1}` : storedCard.name}</span>
+                  </button>
+                );
+              })}
+              {sabotageCards.length === 0 && <p className="empty-storage">No discardable storage cards. Gold and Diamond cannot be discarded.</p>}
             </div>
           </div>
         )}
@@ -2015,7 +2169,7 @@ const TradeBuilderModal = ({ hand, storage, opponents, defaultTargetName, onClos
         </div>
 
         <p className="trade-storage-note">
-          You can offer cards from your hand or storage. Offered storage cards go straight into the other player's storage if the trade completes.
+          Hand cards stay hand cards after trading. Storage cards stay storage cards after trading.
         </p>
 
         <div className="trade-target-row">
@@ -2122,7 +2276,7 @@ const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm }) => {
           </p>
         )}
 
-        <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} />
+        <TradeOffer title={`${trade.initiatorName} offers`} cards={trade.initiatorOffer} handCards={trade.initiatorOfferHand} storageCards={trade.initiatorOfferStorage} />
         <h3>Select 0 to 4 cards to offer back</h3>
         <SelectableOfferGrid
           hand={hand}

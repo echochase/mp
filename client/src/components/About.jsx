@@ -41,13 +41,14 @@ export const About = () => {
 
       <h2>Actions and Reactions</h2>
       <p>
-        Action cards are powerful one-off effects. Most actions open a short reaction window where opponents can respond
-        with cards like <b>I Think Not</b> or <b>Absolutely Not</b>. If no reaction cancels the action, it resolves.
+        Action cards are powerful one-off effects. Some actions, like <b>Sabotage</b>, can discard stored resources but cannot discard Gold or Diamond. Most actions open a short reaction window where opponents can respond
+        with cards like <b>I Think Not</b> or <b>Absolutely Not</b>. <b>I Think Not</b> can be countered by another
+        <b> I Think Not</b>, while <b>Absolutely Not</b> cannot be overridden once played.
       </p>
 
       <h2>Trading</h2>
       <p>
-        Trades let players exchange cards from hand. After an unprotected trade is accepted, the trading players may have
+        Trades let players exchange cards from hand or storage. Cards keep their zone after the trade: hand cards go to hand, and storage cards go to storage. After an unprotected trade is accepted, the trading players may have
         a brief chance to use <b>It's a Scam</b>. A <b>Binding Contract</b> protects the trade and prevents scams.
       </p>
 
