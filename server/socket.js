@@ -173,7 +173,7 @@ const PLAYING_CARD_DEFS = [
     type: 'action',
     count: 1,
     needsTarget: false,
-    description: 'Discard your hand and draw 7 new playing cards. Also completes Wizard if you hold that goal.',
+    description: "Destroy every player's current goal cards, then deal each player the same number of replacement goals. Also completes Wizard if you hold that goal.",
   },
 ];
 
@@ -1043,9 +1043,30 @@ function resolveAction(roomData, player, card, payload) {
     }
 
     case 'totalRenewal': {
-      roomData.playDiscard.push(...player.hand.splice(0, player.hand.length));
-      player.hand.push(...drawMany(roomData, 'play', 7));
-      return ok(' and renewed their hand');
+      const renewalPlans = [];
+      const destroyedSummary = [];
+
+      for (const targetPlayer of roomData.players) {
+        const destroyedGoals = targetPlayer.goals.splice(0, targetPlayer.goals.length);
+        if (destroyedGoals.length === 0) {
+          destroyedSummary.push(`0 from ${targetPlayer.name}`);
+          continue;
+        }
+        roomData.goalDiscard.push(...destroyedGoals);
+        renewalPlans.push({ player: targetPlayer, count: destroyedGoals.length });
+        destroyedSummary.push(`${destroyedGoals.length} from ${targetPlayer.name}`);
+      }
+
+      for (const plan of renewalPlans) {
+        for (let index = 0; index < plan.count; index += 1) {
+          if (roomData.winner) break;
+          const replacement = drawCard(roomData, 'goal');
+          if (replacement) plan.player.goals.push(replacement);
+        }
+        if (roomData.winner) break;
+      }
+
+      return ok(` and renewed every player's goals (${destroyedSummary.join(', ')})`);
     }
 
     case 'absoluteCalamity': {

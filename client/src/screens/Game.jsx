@@ -1555,13 +1555,19 @@ const TableTopView = ({
   const [isStorageDragOver, setIsStorageDragOver] = useState(false);
   const opponents = players.filter((p) => p.name !== meName);
   const colTemplate = `repeat(${Math.max(opponents.length, 1)}, 1fr)`;
+  const opponentZonesClassName = [
+    "tabletop-zones-row tabletop-opponent-zones",
+    opponents.length % 2 === 1 ? "has-odd-opponents" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="tabletop-view">
       {/* Felt table surface */}
       <div className="tabletop-surface">
         {/* Opponent storage zones */}
-        <div className="tabletop-zones-row tabletop-opponent-zones" style={{ gridTemplateColumns: colTemplate }}>
+        <div className={opponentZonesClassName} style={{ gridTemplateColumns: colTemplate }}>
           {opponents.map((player) => (
             <div
               key={player.name}
@@ -2547,7 +2553,7 @@ const MagicHandChoiceModal = ({ choice, onConfirm }) => {
 
   return (
     <div className="modal-backdrop locked-choice-backdrop">
-      <section className="discard-modal magic-hand-choice-modal">
+      <section className="discard-modal magic-hand-choice-modal image-only-choice-modal">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Magic Hand</p>
@@ -2555,16 +2561,17 @@ const MagicHandChoiceModal = ({ choice, onConfirm }) => {
           </div>
         </div>
         <p className="modal-description">Pick one available playing card, then confirm to add it to your hand.</p>
-        <div className="discard-modal-grid">
+        <div className="discard-modal-grid magic-hand-image-grid">
           {(choice.choices || []).map((card) => (
             <button
               type="button"
-              className={`discard-modal-card selectable-discard-card ${selectedCardId === card.id ? "selected" : ""}`}
+              className={`discard-modal-card selectable-discard-card magic-hand-image-choice ${selectedCardId === card.id ? "selected" : ""}`}
               key={card.id}
               onClick={() => setSelectedCardId(card.id)}
+              aria-label={`Choose ${card.name || titleCase(card.key || "card")}`}
+              title={card.name || titleCase(card.key || "card")}
             >
-              <CardFace card={card} compact />
-              <span>{card.name}</span>
+              <CardFace card={card} compact hoverMode="none" noHoverScale className="magic-hand-choice-face" />
             </button>
           ))}
         </div>
