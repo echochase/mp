@@ -153,6 +153,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [turnPulse, setTurnPulse] = useState(0);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
+  const [combinedDiscardOpen, setCombinedDiscardOpen] = useState(false);
   const [completedGoalsPileOpen, setCompletedGoalsPileOpen] = useState(false);
   const [expandedGoalCard, setExpandedGoalCard] = useState(null);
   const [dismissedRevealIds, setDismissedRevealIds] = useState(new Set());
@@ -409,8 +410,23 @@ useEffect(
     );
   }
 
+  const playerCount = gameState.players?.length || 0;
+  const tableLayoutClassName = [
+    "table-layout",
+    playerCount < 4 ? "mobile-low-player-count" : "",
+    playerCount < 6 ? "mobile-under-full-lobby" : "mobile-full-lobby",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const gamePageClassName = [
+    "game-page",
+    playerCount < 6 ? "mobile-under-full-lobby-page" : "mobile-full-lobby-page",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <main className="game-page">
+    <main className={gamePageClassName}>
       <header className="game-header compact-header">
         <div>
           <p className="eyebrow">Room {roomCode}</p>
@@ -455,7 +471,7 @@ useEffect(
         </div>
       )}
 
-      <section className="table-layout">
+      <section className={tableLayoutClassName}>
         {/* ── LEFT SIDEBAR: progress + goals + completed goals ── */}
         <aside className="game-sidebar left-game-sidebar">
           <div className="mobile-progress-goals-combo">
@@ -545,9 +561,11 @@ useEffect(
                 onMeditator={(goal, goalIndex) => setMeditatorGoal({ goal, goalIndex })}
                 actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
                 onExpandGoal={setExpandedGoalCard}
+                deckCounts={gameState.deckCounts}
                 onOpenSeating={() => setSeatingOrderOpen(true)}
                 onOpenCompleted={() => setCompletedGoalsPileOpen(true)}
                 onOpenLog={() => setTableLogOpen(true)}
+                onOpenDiscarded={() => setCombinedDiscardOpen(true)}
               />
             }
           />
@@ -752,6 +770,15 @@ useEffect(
         />
       )}
 
+      {combinedDiscardOpen && (
+        <CombinedDiscardModal
+          playingCards={gameState.discardPile?.playing || []}
+          goalCards={gameState.discardPile?.goals || []}
+          onClose={() => setCombinedDiscardOpen(false)}
+          onExpandGoal={setExpandedGoalCard}
+        />
+      )}
+
       {magicHandChoice && (
         <MagicHandChoiceModal choice={magicHandChoice} onConfirm={chooseDiscardCard} />
       )}
@@ -920,15 +947,47 @@ const PlayingCard = ({
     if ((!canDragToStorage && !canDragToPlay) || event.pointerType === "mouse") return;
     if (event.target.closest("button")) return;
 
+    const sourceCard = event.currentTarget;
+    const sourceFace = sourceCard.querySelector(".card-face-button");
     const startX = event.clientX;
     const startY = event.clientY;
     let dragging = false;
+    let dragGhost = null;
+
+    const positionGhost = (clientX, clientY) => {
+      if (!dragGhost) return;
+      dragGhost.style.transform = `translate3d(${clientX}px, ${clientY}px, 0) translate(-50%, -62%)`;
+    };
+
+    const createGhost = (moveEvent) => {
+      if (dragGhost || typeof document === "undefined") return;
+      dragGhost = document.createElement("div");
+      dragGhost.className = "mobile-drag-card-ghost";
+      const clonedFace = sourceFace?.cloneNode(true);
+      if (clonedFace) {
+        clonedFace.classList.add("no-hover-scale");
+        dragGhost.appendChild(clonedFace);
+      } else {
+        dragGhost.textContent = card.name || titleCase(card.key || "Card");
+      }
+      document.body.appendChild(dragGhost);
+      sourceCard.classList.add("mobile-source-dragging");
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const removeGhost = () => {
+      if (dragGhost?.parentNode) dragGhost.parentNode.removeChild(dragGhost);
+      sourceCard.classList.remove("mobile-source-dragging");
+      dragGhost = null;
+    };
 
     const handlePointerMove = (moveEvent) => {
       const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
       if (!dragging && distance < 8) return;
       dragging = true;
       moveEvent.preventDefault();
+      createGhost(moveEvent);
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
 
       const hoveredElement = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
       const storageDrop = hoveredElement?.closest(".tabletop-me-zone");
@@ -947,6 +1006,7 @@ const PlayingCard = ({
       const droppedOnStorage = Boolean(hoveredElement?.closest(".tabletop-me-zone"));
       const droppedOnPlaySpace = Boolean(hoveredElement?.closest(".mobile-play-space"));
       clearPointerDropHighlights();
+      removeGhost();
 
       if (!dragging) return;
       if ((canDragToStorage && droppedOnStorage) || (canDragToPlay && droppedOnPlaySpace)) {
@@ -963,7 +1023,7 @@ const PlayingCard = ({
     <article
       className={`mp-card compact-mp-card ${isResource ? "resource-card" : "action-card"} ${
         card.specialResource ? "special-resource-card" : ""
-      } ${isNew ? "draw-new-card" : ""} ${canDragToStorage ? "draggable-resource-card" : ""} ${canDragToPlay ? "draggable-action-card" : ""}`}
+      } ${isNew ? "draw-new-card" : ""} ${mustDiscard ? "must-discard-card" : ""} ${canDragToStorage ? "draggable-resource-card" : ""} ${canDragToPlay ? "draggable-action-card" : ""}`}
       draggable={Boolean(canDragToStorage || canDragToPlay)}
       onDragStart={handleDragStart}
       onPointerDown={handlePointerDown}
@@ -1280,6 +1340,20 @@ const MyProgressPanel = ({ me, isCurrent }) => {
   );
 };
 
+const MobileDeckSummary = ({ deckCounts = {} }) => {
+  const backSrc = imageMap["card-back"];
+  return (
+    <section className="game-panel compact-panel mobile-table-deck-panel" aria-label="Deck counts">
+      <p className="eyebrow">Deck</p>
+      <div className="mobile-deck-card">
+        {backSrc ? <img src={backSrc} alt="Deck" /> : <span>Deck</span>}
+        <strong>{deckCounts.playing ?? 0}</strong>
+      </div>
+      <span>{deckCounts.goals ?? 0} goals</span>
+    </section>
+  );
+};
+
 const MobileTableDashboard = ({
   me,
   isCurrent,
@@ -1290,13 +1364,16 @@ const MobileTableDashboard = ({
   onMeditator,
   actionCardsAvailable = 0,
   onExpandGoal,
+  deckCounts,
   onOpenSeating,
   onOpenCompleted,
   onOpenLog,
+  onOpenDiscarded,
 }) => (
   <div className="mobile-table-dashboard">
     <div className="mobile-table-info-row">
       <MyProgressPanel me={me} isCurrent={isCurrent} />
+      <MobileDeckSummary deckCounts={deckCounts} />
       <section className="game-panel compact-panel compact-goals-panel mobile-table-goals-panel">
         <div className="panel-heading small-heading goals-panel-heading">
           <p className="eyebrow">Private</p>
@@ -1324,8 +1401,9 @@ const MobileTableDashboard = ({
     </div>
     <div className="mobile-table-control-row">
       <button type="button" onClick={onOpenSeating}>View seating order</button>
-      <button type="button" onClick={onOpenCompleted}>View completed goals</button>
+      <button type="button" onClick={onOpenDiscarded}>View discarded</button>
       <button type="button" onClick={onOpenLog}>View table log</button>
+      <button type="button" onClick={onOpenCompleted}>View completed goals</button>
     </div>
   </div>
 );
@@ -2372,26 +2450,57 @@ const PlayerAvatar = ({ player, size = "normal" }) => (
   </span>
 );
 
-const DiscardPileStack = ({ playingCards = [], goalCards = [], onOpen }) => {
-  const count = playingCards.length + goalCards.length;
-  const topCard = playingCards[playingCards.length - 1] || goalCards[goalCards.length - 1] || null;
+const CombinedDiscardModal = ({ playingCards = [], goalCards = [], onClose, onExpandGoal }) => {
+  const [activePile, setActivePile] = useState("playing");
+  const cards = activePile === "playing"
+    ? playingCards.map((card) => ({ ...card, pileLabel: "Card discard", isGoalCard: false })).reverse()
+    : goalCards.map((card) => ({ ...card, pileLabel: "Goal discard", isGoalCard: true })).reverse();
 
   return (
-    <section className="discard-pile-dock" aria-label="Discard pile">
-      <button className="discard-pile-stack" type="button" onClick={onOpen}>
-        <span className="discard-card-layer discard-layer-one" />
-        <span className="discard-card-layer discard-layer-two" />
-        <span className="discard-card-layer discard-layer-three">
-          {topCard ? <CardFace card={topCard} compact hoverMode="none" noHoverScale /> : <span className="empty-discard-face">Discard</span>}
-        </span>
-        <strong>{count}</strong>
-      </button>
-      <div>
-        <p className="eyebrow">Centre pile</p>
-        <h2>Discard Pile</h2>
-        <span>{count ? "Click to inspect played cards" : "Nothing discarded yet"}</span>
-      </div>
-    </section>
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="discard-modal combined-discard-modal" onClick={(event) => event.stopPropagation()}>
+        <p className="eyebrow" style={{ textAlign: "center" }}>Table Memory</p>
+        <h2 className="discard-modal-title">Discarded Cards</h2>
+        <div className="combined-discard-tabs">
+          <button
+            type="button"
+            className={activePile === "playing" ? "active" : ""}
+            onClick={() => setActivePile("playing")}
+          >
+            Card discard ({playingCards.length})
+          </button>
+          <button
+            type="button"
+            className={activePile === "goals" ? "active" : ""}
+            onClick={() => setActivePile("goals")}
+          >
+            Goal discard ({goalCards.length})
+          </button>
+        </div>
+        {cards.length === 0 ? (
+          <p className="empty-storage" style={{ textAlign: "center", margin: "24px 0" }}>Nothing here yet.</p>
+        ) : (
+          <div className="discard-modal-grid">
+            {cards.map((card) => (
+              <article className="discard-modal-card" key={`${card.pileLabel}-${card.id}`}>
+                <CardFace
+                  card={card}
+                  compact
+                  className={!card.isGoalCard && card.type === "action" ? "discard-action-card-face" : ""}
+                  hoverMode={card.isGoalCard ? "expand" : card.type === "action" ? "none" : undefined}
+                  hoverButtonLabel="Expand"
+                  onHoverButtonClick={card.isGoalCard ? () => onExpandGoal?.(card) : undefined}
+                  onClick={card.isGoalCard ? () => { if (isMobileTableViewport()) onExpandGoal?.(card); } : undefined}
+                  noHoverScale={card.isGoalCard}
+                />
+                <span>{card.name}</span>
+              </article>
+            ))}
+          </div>
+        )}
+        <button className="ghost-button discard-modal-close" onClick={onClose}>Close</button>
+      </section>
+    </div>
   );
 };
 
