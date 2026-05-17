@@ -68,7 +68,28 @@ const titleCase = (value = "") =>
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const getCardImage = (card) => imageMap[card?.key] || imageMap[card?.name] || null;
+const normalizeImageLookupKey = (value = "") =>
+  String(value)
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+
+const normalizedImageMap = Object.entries(imageMap).reduce((acc, [key, src]) => {
+  acc[normalizeImageLookupKey(key)] = src;
+  return acc;
+}, {});
+
+const getCardImage = (card) => {
+  const directKey = card?.key || card?.imageKey;
+  const directName = card?.name || card?.title;
+  return (
+    imageMap[directKey] ||
+    imageMap[directName] ||
+    normalizedImageMap[normalizeImageLookupKey(directKey)] ||
+    normalizedImageMap[normalizeImageLookupKey(directName)] ||
+    null
+  );
+};
 
 const getSortRank = (card) => {
   if (card?.type === "resource") {
@@ -115,12 +136,16 @@ const formatCountdown = (targetTime, now) => {
   return `${Math.max(0, (targetTime - now) / 1000).toFixed(1)}s`;
 };
 
+const isMobileTableViewport = () =>
+  typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
+
 export const Game = ({ socket, name, room, setRoom }) => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const previousStateRef = useRef(null);
   const newCardTimerRef = useRef(null);
   const noticeTimerRef = useRef(null);
+  const resolvedActionTimerRef = useRef(null);
   const [gameState, setGameState] = useState(null);
   const [error, setError] = useState("");
   const [noticeToast, setNoticeToast] = useState(null);
@@ -137,6 +162,10 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [actionModalCard, setActionModalCard] = useState(null);
   const [tradeBuilderOpen, setTradeBuilderOpen] = useState(false);
   const [tradeResponseOpen, setTradeResponseOpen] = useState(false);
+  const [tableLogOpen, setTableLogOpen] = useState(false);
+  const [seatingOrderOpen, setSeatingOrderOpen] = useState(false);
+  const [expandedStoragePlayer, setExpandedStoragePlayer] = useState(null);
+  const [resolvedMobileAction, setResolvedMobileAction] = useState(null);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -201,6 +230,15 @@ export const Game = ({ socket, name, room, setRoom }) => {
       if (previous.currentPlayerName !== gameState.currentPlayerName) {
         setTurnPulse((value) => value + 1);
       }
+
+      if (previous.pendingAction && !gameState.pendingAction) {
+        window.clearTimeout(resolvedActionTimerRef.current);
+        setResolvedMobileAction({
+          id: `${previous.pendingAction.card?.id || previous.pendingAction.card?.key || "action"}-${Date.now()}`,
+          card: previous.pendingAction.card,
+        });
+        resolvedActionTimerRef.current = window.setTimeout(() => setResolvedMobileAction(null), 900);
+      }
     }
 
     previousStateRef.current = gameState;
@@ -226,6 +264,7 @@ useEffect(
     () => () => {
       window.clearTimeout(newCardTimerRef.current);
       window.clearTimeout(noticeTimerRef.current);
+      window.clearTimeout(resolvedActionTimerRef.current);
     },
     []
   );
@@ -326,9 +365,32 @@ useEffect(
     playCard(card);
   };
 
+  const canPlayActionCard = (card) => {
+    if (!card || card.type !== "action" || gameState?.winner || gameState?.pendingChoice || me?.pendingChoice) return false;
+
+    const isCancelReaction = CANCEL_REACTION_KEYS.includes(card.key);
+    const isTradeTool = TRADE_TOOL_KEYS.includes(card.key);
+    const actionBlockedByTable = Boolean(gameState?.activeTrade || (gameState?.pendingAction && !isCancelReaction));
+    const canReact = isCancelReaction && me?.canReactToAction && gameState?.pendingAction;
+    const canPlayNormalAction =
+      !isCancelReaction &&
+      !isTradeTool &&
+      !me?.mustDiscard &&
+      !actionBlockedByTable &&
+      me?.isYourTurn &&
+      !me?.actionPlayed;
+
+    return Boolean(canReact || canPlayNormalAction);
+  };
+
   const handleResourceDrop = (cardId) => {
     const resourceCard = sortedHand.find((card) => String(card.id) === String(cardId));
     storeResourceCard(resourceCard);
+  };
+
+  const handleActionDrop = (cardId) => {
+    const actionCard = sortedHand.find((card) => String(card.id) === String(cardId));
+    if (canPlayActionCard(actionCard)) beginPlayCard(actionCard);
   };
 
   const leaveTable = () => {
@@ -395,32 +457,34 @@ useEffect(
 
       <section className="table-layout">
         {/* ── LEFT SIDEBAR: progress + goals + completed goals ── */}
-        <aside className="game-sidebar">
-          <MyProgressPanel me={me} isCurrent={me.name === gameState.currentPlayerName} />
-          <section className="game-panel goals-panel compact-panel compact-goals-panel">
-            <div className="panel-heading small-heading">
-              <p className="eyebrow">Private</p>
-              <h2>Your Goals</h2>
-            </div>
-            <div className="goals-grid compact-goals-grid">
-              {me.goals.map((goal, index) => (
-                <GoalCard
-                  key={goal.id || `${goal.key}-${index}`}
-                  goal={goal}
-                  index={index}
-                  disabled={Boolean(gameState.winner) || tableLocked}
-                  isYourTurn={me.isYourTurn}
-                  goalRerolled={me.goalRerolled}
-                  onReroll={() => rerollGoal(index)}
-                  onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
-                  onActionReady={() => setActionReadyGoal({ goal, goalIndex: index })}
-                  onMeditator={() => setMeditatorGoal({ goal, goalIndex: index })}
-                  actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
-                  onExpand={() => setExpandedGoalCard(goal)}
-                />
-              ))}
-            </div>
-          </section>
+        <aside className="game-sidebar left-game-sidebar">
+          <div className="mobile-progress-goals-combo">
+            <MyProgressPanel me={me} isCurrent={me.name === gameState.currentPlayerName} />
+            <section className="game-panel goals-panel compact-panel compact-goals-panel">
+              <div className="panel-heading small-heading goals-panel-heading">
+                <p className="eyebrow">Private</p>
+                <h2>Your Goals</h2>
+              </div>
+              <div className="goals-grid compact-goals-grid">
+                {me.goals.map((goal, index) => (
+                  <GoalCard
+                    key={goal.id || `${goal.key}-${index}`}
+                    goal={goal}
+                    index={index}
+                    disabled={Boolean(gameState.winner) || tableLocked}
+                    isYourTurn={me.isYourTurn}
+                    goalRerolled={me.goalRerolled}
+                    onReroll={() => rerollGoal(index)}
+                    onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
+                    onActionReady={() => setActionReadyGoal({ goal, goalIndex: index })}
+                    onMeditator={() => setMeditatorGoal({ goal, goalIndex: index })}
+                    actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
+                    onExpand={() => setExpandedGoalCard(goal)}
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
           <CompletedGoalsPanel
             completedGoals={me.completedGoals || []}
             onOpen={() => setCompletedGoalsPileOpen(true)}
@@ -462,6 +526,30 @@ useEffect(
             onStoreResourceDrop={handleResourceDrop}
             onOpenCardDiscard={() => setDiscardPileOpen(true)}
             onOpenGoalDiscard={() => setGoalDiscardPileOpen(true)}
+            canPlayDraggedAction={sortedHand.some(canPlayActionCard)}
+            onActionCardDrop={handleActionDrop}
+            pendingAction={gameState.pendingAction}
+            resolvedMobileAction={resolvedMobileAction}
+            now={now}
+            reactionHand={sortedHand}
+            onReact={(card) => playCard(card)}
+            onOpenStorage={(player) => setExpandedStoragePlayer(player)}
+            mobileDashboard={
+              <MobileTableDashboard
+                me={me}
+                isCurrent={me.name === gameState.currentPlayerName}
+                disabled={Boolean(gameState.winner) || tableLocked}
+                onReroll={rerollGoal}
+                onInvestor={(goal, goalIndex) => setInvestorGoal({ goal, goalIndex })}
+                onActionReady={(goal, goalIndex) => setActionReadyGoal({ goal, goalIndex })}
+                onMeditator={(goal, goalIndex) => setMeditatorGoal({ goal, goalIndex })}
+                actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
+                onExpandGoal={setExpandedGoalCard}
+                onOpenSeating={() => setSeatingOrderOpen(true)}
+                onOpenCompleted={() => setCompletedGoalsPileOpen(true)}
+                onOpenLog={() => setTableLogOpen(true)}
+              />
+            }
           />
 
           <section className="game-panel hand-panel compact-panel compact-hand-strip">
@@ -507,6 +595,7 @@ useEffect(
                   activeTrade={gameState.activeTrade || gameState.pendingChoice || me.pendingChoice}
                   canReactToAction={me.canReactToAction}
                   canDragToStorage={canStoreResourceCard(card)}
+                  canDragToPlay={canPlayActionCard(card)}
                   onPlay={() => beginPlayCard(card)}
                   onDiscard={() => discardCard(card)}
                 />
@@ -516,14 +605,28 @@ useEffect(
         </section>
 
         {/* ── RIGHT SIDEBAR: seating order + history ── */}
-        <aside className="game-sidebar">
-          <section className="game-panel compact-panel">
-            <div className="panel-heading split-heading small-heading">
+        <aside className="game-sidebar right-game-sidebar">
+          <section className="game-panel compact-panel seating-panel">
+            <div className="panel-heading split-heading small-heading seating-heading">
               <div>
                 <p className="eyebrow">Players</p>
                 <h2>Seating Order</h2>
               </div>
-              <span className="deck-pill">{gameState.players.length} seated</span>
+              <span className="deck-pill seated-count-pill">{gameState.players.length} seated</span>
+              <button
+                className="mobile-seating-expand-button"
+                type="button"
+                onClick={() => setSeatingOrderOpen(true)}
+              >
+                Expand
+              </button>
+            </div>
+            <div key={`mobile-turn-${turnPulse}`} className="turn-card turn-card-attention current-turn-card mobile-seating-turn-card">
+              {!gameState.winner && currentTurnPlayer && <PlayerAvatar player={currentTurnPlayer} size="large" />}
+              <div>
+                <span>Current turn</span>
+                <strong>{gameState.winner ? "Game Over" : gameState.currentPlayerName}</strong>
+              </div>
             </div>
             <SeatingOrder
               players={gameState.players}
@@ -532,10 +635,15 @@ useEffect(
               showScore={false}
             />
           </section>
-          <section className="game-panel log-panel compact-panel compact-log-panel">
-            <div className="panel-heading small-heading">
-              <p className="eyebrow">History</p>
-              <h2>Table Log</h2>
+          <section className="game-panel log-panel compact-panel compact-log-panel mobile-collapsed-log-panel">
+            <div className="panel-heading split-heading small-heading">
+              <div>
+                <p className="eyebrow">History</p>
+                <h2>Table Log</h2>
+              </div>
+              <button className="mobile-log-expand-button" type="button" onClick={() => setTableLogOpen(true)}>
+                Expand
+              </button>
             </div>
             <div className="log-list compact-log-list">
               {gameState.log.slice().reverse().map((entry, index) => (
@@ -659,6 +767,26 @@ useEffect(
         <ExpandedGoalCardModal card={expandedGoalCard} onClose={() => setExpandedGoalCard(null)} />
       )}
 
+      {tableLogOpen && (
+        <TableLogModal log={gameState.log || []} onClose={() => setTableLogOpen(false)} />
+      )}
+
+      {seatingOrderOpen && (
+        <SeatingOrderModal
+          players={gameState.players || []}
+          currentPlayerName={gameState.currentPlayerName}
+          meName={name}
+          onClose={() => setSeatingOrderOpen(false)}
+        />
+      )}
+
+      {expandedStoragePlayer && (
+        <StorageModal
+          player={expandedStoragePlayer}
+          onClose={() => setExpandedStoragePlayer(null)}
+        />
+      )}
+
       <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
     </main>
   );
@@ -672,6 +800,7 @@ const CardFace = ({
   hoverButtonLabel = "Expand",
   hoverButtonDisabled = false,
   onHoverButtonClick,
+  onClick,
   noHoverScale = false,
 }) => {
   const image = getCardImage(card);
@@ -721,6 +850,7 @@ const CardFace = ({
     <div
       className={`card-face-button ${compact ? "compact-face" : ""} ${noHoverScale ? "no-hover-scale" : ""} hover-mode-${effectiveHoverMode} ${className}`}
       aria-label={cardTitle}
+      onClick={onClick}
     >
       {image ? <img src={image} alt={cardTitle} /> : <div className="card-fallback">{cardTitle}</div>}
       {renderHoverLayer()}
@@ -740,6 +870,7 @@ const PlayingCard = ({
   activeTrade,
   canReactToAction,
   canDragToStorage,
+  canDragToPlay,
   onPlay,
   onDiscard,
 }) => {
@@ -762,24 +893,80 @@ const PlayingCard = ({
   const showActionHoverPlay = isAction && !disabled && (canPlayNormalAction || canReact);
   const playDisabled = disabled || (!canPlayResource && !canPlayNormalAction && !canReact);
 
+  const clearPointerDropHighlights = () => {
+    if (typeof document === "undefined") return;
+    document
+      .querySelectorAll(".mobile-pointer-drag-over")
+      .forEach((element) => element.classList.remove("mobile-pointer-drag-over"));
+  };
+
   const handleDragStart = (event) => {
-    if (!canDragToStorage) {
+    if (!canDragToStorage && !canDragToPlay) {
       event.preventDefault();
       return;
     }
 
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-mp-resource-card-id", String(card.id));
+    if (canDragToStorage) {
+      event.dataTransfer.setData("application/x-mp-resource-card-id", String(card.id));
+    }
+    if (canDragToPlay) {
+      event.dataTransfer.setData("application/x-mp-action-card-id", String(card.id));
+    }
     event.dataTransfer.setData("text/plain", String(card.id));
+  };
+
+  const handlePointerDown = (event) => {
+    if ((!canDragToStorage && !canDragToPlay) || event.pointerType === "mouse") return;
+    if (event.target.closest("button")) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let dragging = false;
+
+    const handlePointerMove = (moveEvent) => {
+      const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+      if (!dragging && distance < 8) return;
+      dragging = true;
+      moveEvent.preventDefault();
+
+      const hoveredElement = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const storageDrop = hoveredElement?.closest(".tabletop-me-zone");
+      const playDrop = hoveredElement?.closest(".mobile-play-space");
+      clearPointerDropHighlights();
+      if (canDragToStorage && storageDrop) storageDrop.classList.add("mobile-pointer-drag-over");
+      if (canDragToPlay && playDrop) playDrop.classList.add("mobile-pointer-drag-over");
+    };
+
+    const finishPointerDrag = (upEvent) => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishPointerDrag);
+      window.removeEventListener("pointercancel", finishPointerDrag);
+
+      const hoveredElement = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+      const droppedOnStorage = Boolean(hoveredElement?.closest(".tabletop-me-zone"));
+      const droppedOnPlaySpace = Boolean(hoveredElement?.closest(".mobile-play-space"));
+      clearPointerDropHighlights();
+
+      if (!dragging) return;
+      if ((canDragToStorage && droppedOnStorage) || (canDragToPlay && droppedOnPlaySpace)) {
+        onPlay?.();
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", finishPointerDrag, { once: true });
+    window.addEventListener("pointercancel", finishPointerDrag, { once: true });
   };
 
   return (
     <article
       className={`mp-card compact-mp-card ${isResource ? "resource-card" : "action-card"} ${
         card.specialResource ? "special-resource-card" : ""
-      } ${isNew ? "draw-new-card" : ""} ${canDragToStorage ? "draggable-resource-card" : ""}`}
-      draggable={Boolean(canDragToStorage)}
+      } ${isNew ? "draw-new-card" : ""} ${canDragToStorage ? "draggable-resource-card" : ""} ${canDragToPlay ? "draggable-action-card" : ""}`}
+      draggable={Boolean(canDragToStorage || canDragToPlay)}
       onDragStart={handleDragStart}
+      onPointerDown={handlePointerDown}
     >
       <CardFace
         card={card}
@@ -797,17 +984,22 @@ const PlayingCard = ({
           <button disabled={playDisabled} onClick={onPlay}>
             Store
           </button>
+        ) : isAction && showPlayButton ? (
+          <>
+            <button className="mobile-card-action-button" disabled={playDisabled} onClick={onPlay}>
+              Play
+            </button>
+            <span className="card-state-chip desktop-card-state-chip">Hover to play</span>
+          </>
         ) : (
           <span className="card-state-chip">
-            {isAction && showPlayButton
-              ? "Hover to play"
-              : isCancelReaction
-                ? "Reaction only"
-                : isTradeTool
-                  ? "Trade tool"
-                  : tableLocked
-                    ? "Waiting"
-                    : "Unavailable"}
+            {isCancelReaction
+              ? "Reaction only"
+              : isTradeTool
+                ? "Trade tool"
+                : tableLocked
+                  ? "Waiting"
+                  : "Unavailable"}
           </span>
         )}
       </div>
@@ -933,14 +1125,23 @@ const GoalCard = ({
   const canOpenActionReady = isActionReady && isYourTurn && actionCardsAvailable >= 7;
   const canOpenMeditator = isMeditator && isYourTurn && actionCardsAvailable >= 4;
 
+  const handleGoalTap = (event) => {
+    if (event.target.closest("button")) return;
+    if (isMobileTableViewport()) onExpand?.();
+  };
+
   return (
-    <article className={`goal-card-box compact-goal-card ${isInvestor ? "investor-goal-card" : ""}`}>
+    <article
+      className={`goal-card-box compact-goal-card ${isInvestor ? "investor-goal-card" : ""}`}
+      onClick={handleGoalTap}
+    >
       <CardFace
         card={goal}
         compact
         hoverMode="expand"
         hoverButtonLabel="Expand"
         onHoverButtonClick={onExpand}
+        onClick={handleGoalTap}
         noHoverScale
       />
       <div className="goal-meta compact-goal-meta">
@@ -1079,6 +1280,118 @@ const MyProgressPanel = ({ me, isCurrent }) => {
   );
 };
 
+const MobileTableDashboard = ({
+  me,
+  isCurrent,
+  disabled,
+  onReroll,
+  onInvestor,
+  onActionReady,
+  onMeditator,
+  actionCardsAvailable = 0,
+  onExpandGoal,
+  onOpenSeating,
+  onOpenCompleted,
+  onOpenLog,
+}) => (
+  <div className="mobile-table-dashboard">
+    <div className="mobile-table-info-row">
+      <MyProgressPanel me={me} isCurrent={isCurrent} />
+      <section className="game-panel compact-panel compact-goals-panel mobile-table-goals-panel">
+        <div className="panel-heading small-heading goals-panel-heading">
+          <p className="eyebrow">Private</p>
+          <h2>Your Goals</h2>
+        </div>
+        <div className="goals-grid compact-goals-grid mobile-table-goals-grid">
+          {(me.goals || []).map((goal, index) => (
+            <GoalCard
+              key={goal.id || `${goal.key}-${index}`}
+              goal={goal}
+              index={index}
+              disabled={disabled}
+              isYourTurn={me.isYourTurn}
+              goalRerolled={me.goalRerolled}
+              onReroll={() => onReroll(index)}
+              onInvestor={() => onInvestor(goal, index)}
+              onActionReady={() => onActionReady(goal, index)}
+              onMeditator={() => onMeditator(goal, index)}
+              actionCardsAvailable={actionCardsAvailable}
+              onExpand={() => onExpandGoal(goal)}
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+    <div className="mobile-table-control-row">
+      <button type="button" onClick={onOpenSeating}>View seating order</button>
+      <button type="button" onClick={onOpenCompleted}>View completed goals</button>
+      <button type="button" onClick={onOpenLog}>View table log</button>
+    </div>
+  </div>
+);
+
+const TableLogModal = ({ log = [], onClose }) => (
+  <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+    <section className="trade-modal table-log-modal" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal-heading">
+        <div>
+          <p className="eyebrow">History</p>
+          <h2>Table Log</h2>
+        </div>
+      </div>
+      <div className="log-list table-log-modal-list">
+        {log.length === 0 ? (
+          <p>No table events yet.</p>
+        ) : (
+          log.slice().reverse().map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>)
+        )}
+      </div>
+      <button type="button" className="modal-confirm-button" onClick={onClose}>
+        Close
+      </button>
+    </section>
+  </div>
+);
+
+const StorageModal = ({ player, onClose }) => (
+  <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+    <section className="trade-modal storage-modal" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal-heading">
+        <div>
+          <p className="eyebrow">Storage</p>
+          <h2>{player?.name || "Player"}</h2>
+        </div>
+      </div>
+      <div className="storage-modal-body">
+        <StorageCards cards={player?.storage || []} />
+      </div>
+      <button type="button" className="modal-confirm-button" onClick={onClose}>
+        Close
+      </button>
+    </section>
+  </div>
+);
+
+const SeatingOrderModal = ({ players = [], currentPlayerName, meName, onClose }) => (
+  <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+    <section className="trade-modal seating-order-modal" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal-heading">
+        <div>
+          <p className="eyebrow">Players</p>
+          <h2>Seating Order</h2>
+        </div>
+      </div>
+      <p className="modal-description seating-order-description">Turn order moves clockwise around the table.</p>
+      <div className="seating-order-modal-stage">
+        <SeatingOrder players={players} currentPlayerName={currentPlayerName} meName={meName} showScore />
+      </div>
+      <button type="button" className="modal-confirm-button" onClick={onClose}>
+        Close
+      </button>
+    </section>
+  </div>
+);
+
 const TablePlayerChip = ({ player, isCurrent, isMe = false }) => (
   <div
     className={`table-player-chip${isCurrent ? " table-chip-current" : ""}${isMe ? " table-chip-me" : ""}${!player.connected ? " table-chip-offline" : ""}`}
@@ -1097,6 +1410,48 @@ const TablePlayerChip = ({ player, isCurrent, isMe = false }) => (
   </div>
 );
 
+const MobilePendingActionInPlaySpace = ({ pendingAction, me, now, reactionHand = [], onReact }) => {
+  const reactionCards = reactionHand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
+  const isActor = pendingAction.actorName === me.name;
+
+  return (
+    <div className="mobile-pending-action-play-space">
+      <div className="mobile-pending-action-copy">
+        <span>Reaction window</span>
+        <strong>{pendingAction.actorName} played {pendingAction.card.name}</strong>
+        <small>{formatCountdown(pendingAction.expiresAt, now)} remaining</small>
+      </div>
+      <div className="mobile-pending-action-card-wrap">
+        <CardFace card={pendingAction.card} compact hoverMode="none" noHoverScale />
+      </div>
+      <div className="mobile-pending-reaction-buttons">
+        {isActor && <span className="card-state-chip">Your action</span>}
+        {!isActor && reactionCards.length === 0 && <span className="card-state-chip">No counter</span>}
+        {!isActor && reactionCards.map((card) => (
+          <button
+            type="button"
+            className="danger-button"
+            key={card.id}
+            onClick={() => onReact?.(card)}
+            disabled={!me.canReactToAction}
+          >
+            {card.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const MobileResolvedActionInPlaySpace = ({ card }) => (
+  <div className="mobile-resolved-action-play-space" aria-hidden="true">
+    <div className="mobile-resolved-action-card">
+      <CardFace card={card} compact hoverMode="none" noHoverScale />
+    </div>
+    <span>Resolving to discard</span>
+  </div>
+);
+
 const TableTopView = ({
   players,
   me,
@@ -1108,7 +1463,18 @@ const TableTopView = ({
   onStoreResourceDrop,
   onOpenCardDiscard,
   onOpenGoalDiscard,
+  canPlayDraggedAction,
+  onActionCardDrop,
+  pendingAction,
+  resolvedMobileAction,
+  now,
+  reactionHand = [],
+  onReact,
+  onOpenStorage,
+  mobileDashboard,
 }) => {
+  const [isPlaySpaceDragOver, setIsPlaySpaceDragOver] = useState(false);
+  const [isStorageDragOver, setIsStorageDragOver] = useState(false);
   const opponents = players.filter((p) => p.name !== meName);
   const colTemplate = `repeat(${Math.max(opponents.length, 1)}, 1fr)`;
 
@@ -1124,6 +1490,13 @@ const TableTopView = ({
               className={`tabletop-player-zone tabletop-opponent-zone${player.name === currentPlayerName ? " tabletop-zone-current" : ""}`}
             >
               <TablePlayerChip player={player} isCurrent={player.name === currentPlayerName} />
+              <button
+                className="mobile-storage-expand-button"
+                type="button"
+                onClick={() => onOpenStorage?.(player)}
+              >
+                Expand
+              </button>
               <StorageCards cards={player.storage} compact />
             </div>
           ))}
@@ -1144,19 +1517,75 @@ const TableTopView = ({
           />
         </div>
 
+        <div
+          className={`mobile-play-space${canPlayDraggedAction ? " action-drop-ready" : ""}${isPlaySpaceDragOver ? " action-drop-over" : ""}`}
+          onDragEnter={(event) => {
+            if (!canPlayDraggedAction) return;
+            event.preventDefault();
+            setIsPlaySpaceDragOver(true);
+          }}
+          onDragOver={(event) => {
+            if (!canPlayDraggedAction) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setIsPlaySpaceDragOver(true);
+          }}
+          onDragLeave={() => setIsPlaySpaceDragOver(false)}
+          onDrop={(event) => {
+            if (!canPlayDraggedAction) return;
+            event.preventDefault();
+            setIsPlaySpaceDragOver(false);
+            const cardId =
+              event.dataTransfer.getData("application/x-mp-action-card-id") ||
+              event.dataTransfer.getData("text/plain");
+            if (cardId) onActionCardDrop?.(cardId);
+          }}
+        >
+          {pendingAction ? (
+            <MobilePendingActionInPlaySpace
+              pendingAction={pendingAction}
+              me={me}
+              now={now}
+              reactionHand={reactionHand}
+              onReact={onReact}
+            />
+          ) : resolvedMobileAction ? (
+            <MobileResolvedActionInPlaySpace card={resolvedMobileAction.card} />
+          ) : (
+            <>
+              <strong>Play Space</strong>
+              <span>{isPlaySpaceDragOver ? "Release to play this action" : "Drag action cards here"}</span>
+            </>
+          )}
+        </div>
+
+        {mobileDashboard && (
+          <div className="mobile-table-dashboard-shell">
+            {mobileDashboard}
+          </div>
+        )}
+
         {/* My storage zone */}
         <div
           className={`tabletop-player-zone tabletop-me-zone${me?.name === currentPlayerName ? " tabletop-zone-current" : ""}${
             canStoreDraggedResource ? " storage-drop-ready" : ""
-          }`}
+          }${isStorageDragOver ? " storage-drop-over" : ""}`}
+          onDragEnter={(event) => {
+            if (!canStoreDraggedResource) return;
+            event.preventDefault();
+            setIsStorageDragOver(true);
+          }}
           onDragOver={(event) => {
             if (!canStoreDraggedResource) return;
             event.preventDefault();
             event.dataTransfer.dropEffect = "move";
+            setIsStorageDragOver(true);
           }}
+          onDragLeave={() => setIsStorageDragOver(false)}
           onDrop={(event) => {
             if (!canStoreDraggedResource) return;
             event.preventDefault();
+            setIsStorageDragOver(false);
             const cardId =
               event.dataTransfer.getData("application/x-mp-resource-card-id") ||
               event.dataTransfer.getData("text/plain");
@@ -1326,7 +1755,7 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
             <p className="eyebrow">Configure action</p>
             <h2>{card.name}</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
         <p className="modal-description">{card.description}</p>
 
@@ -1454,6 +1883,9 @@ const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, 
         <button className="gold-button modal-confirm-button" disabled={!canConfirm} onClick={confirm}>
           Play {card.name}
         </button>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
+        </button>
       </section>
     </div>
   );
@@ -1495,7 +1927,7 @@ const TradeBuilderModal = ({ hand, storage, opponents, defaultTargetName, onClos
             <p className="eyebrow">Open trade</p>
             <h2>Make an offer</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
 
         <p className="trade-storage-note">
@@ -1560,6 +1992,9 @@ const TradeBuilderModal = ({ hand, storage, opponents, defaultTargetName, onClos
         >
           Offer Trade
         </button>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
+        </button>
       </section>
     </div>
   );
@@ -1594,7 +2029,7 @@ const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm }) => {
             <p className="eyebrow">Respond to trade</p>
             <h2>{trade.initiatorName}'s offer</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
 
         {trade.bindingUsed && (
@@ -1616,6 +2051,9 @@ const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm }) => {
 
         <button className="gold-button modal-confirm-button" onClick={() => onConfirm({ cardIds: selectedHandIds, storageCardIds: selectedStorageIds })}>
           Send Response
+        </button>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
         </button>
       </section>
     </div>
@@ -1684,7 +2122,7 @@ const ActionReadyModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
             <p className="eyebrow">Special completion</p>
             <h2>{goal.name}</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
 
         <p className="modal-description">
@@ -1722,6 +2160,9 @@ const ActionReadyModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
         >
           Reveal 7 Actions
         </button>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
+        </button>
       </section>
     </div>
   );
@@ -1750,7 +2191,7 @@ const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
             <p className="eyebrow">Special completion</p>
             <h2>{goal.name}</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
 
         <p className="modal-description">
@@ -1787,6 +2228,9 @@ const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
           onClick={() => onConfirm({ goalIndex, actionCardIds: selectedIds })}
         >
           Discard 4 Actions
+        </button>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
         </button>
       </section>
     </div>
@@ -1830,7 +2274,7 @@ const InvestorModal = ({
             <p className="eyebrow">Special completion</p>
             <h2>Investor</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
 
         <p className="modal-description">{goal.description}</p>
@@ -1897,6 +2341,9 @@ const InvestorModal = ({
           onClick={() => onConfirm({ goalIndex, targetName: target, moneyCardIds: selectedIds })}
         >
           Confirm Investment
+        </button>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
         </button>
       </section>
     </div>
@@ -1972,6 +2419,7 @@ const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard 
                   hoverMode={card.isGoalCard ? "expand" : card.type === "action" ? "none" : undefined}
                   hoverButtonLabel="Expand"
                   onHoverButtonClick={card.isGoalCard ? () => onExpandGoal?.(card) : undefined}
+                  onClick={card.isGoalCard ? () => { if (isMobileTableViewport()) onExpandGoal?.(card); } : undefined}
                   noHoverScale={card.isGoalCard}
                 />
               </article>
@@ -2030,7 +2478,7 @@ const ExpandedGoalCardModal = ({ card, onClose }) => {
   return (
     <div className="modal-backdrop expanded-goal-backdrop" onClick={onClose}>
       <section className="expanded-goal-modal" onClick={(event) => event.stopPropagation()}>
-        <button className="ghost-button close-modal-button expanded-goal-close" onClick={onClose}>✕</button>
+        <button className="ghost-button close-modal-button expanded-goal-close desktop-modal-close-button" onClick={onClose}>✕</button>
         <div className="expanded-goal-image-wrap">
           {image ? <img src={image} alt={title} /> : <div className="card-fallback">{title}</div>}
         </div>
@@ -2040,6 +2488,9 @@ const ExpandedGoalCardModal = ({ card, onClose }) => {
           <p>{card?.description || "Read the enlarged card to check this goal."}</p>
           <strong>{card?.key === "investor" ? "Variable points" : `${card?.points || 1} point${(card?.points || 1) === 1 ? "" : "s"}`}</strong>
         </div>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
+        </button>
       </section>
     </div>
   );
@@ -2059,7 +2510,7 @@ const RevealModal = ({ reveal, onClose }) => {
             <p className="eyebrow">{eyebrow}</p>
             <h2>{title}</h2>
           </div>
-          <button className="ghost-button close-modal-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
         {isActionReady && (
           <p className="modal-description">{reveal.actorName} revealed 7 action cards to complete the task Action-Ready.</p>
@@ -2076,6 +2527,9 @@ const RevealModal = ({ reveal, onClose }) => {
             ))}
           </div>
         )}
+        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+          Close
+        </button>
       </section>
     </div>
   );
