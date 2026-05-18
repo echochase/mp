@@ -19,6 +19,7 @@ const RESOURCE_TYPES = [
 const CANCEL_REACTION_KEYS = new Set(['iThinkNot', 'absolutelyNot']);
 const TRADE_TOOL_KEYS = new Set(['itsAScam', 'bindingContract']);
 const NON_NORMAL_ACTION_KEYS = new Set([...CANCEL_REACTION_KEYS, ...TRADE_TOOL_KEYS]);
+const SABOTAGE_PROTECTED_KEYS = new Set(['gold', 'diamond']);
 
 const PLAYING_CARD_DEFS = [
   {
@@ -93,7 +94,7 @@ const PLAYING_CARD_DEFS = [
     type: 'action',
     count: 2,
     reaction: true,
-    description: 'Reaction. During the reaction window, negate the pending action card. The first valid reaction wins.',
+    description: 'Reaction. During the reaction window, negate the pending action card. This cannot be overridden.',
   },
   {
     key: 'absoluteCalamity',
@@ -101,7 +102,7 @@ const PLAYING_CARD_DEFS = [
     type: 'action',
     count: 2,
     needsTarget: false,
-    description: 'Every other player discards one random card from their hand.',
+    description: 'Choose one stored resource from each player to discard.',
   },
   {
     key: 'goalRemoval',
@@ -160,6 +161,14 @@ const PLAYING_CARD_DEFS = [
     description: "Steal a chosen resource from another player's storage.",
   },
   {
+    key: 'sabotage',
+    name: 'Sabotage',
+    type: 'action',
+    count: 3,
+    needsTarget: true,
+    description: "Choose another player and discard 1 or 2 cards from their storage. Gold and Diamond cannot be discarded.",
+  },
+  {
     key: 'oraclesPower',
     name: "Oracle's Power",
     type: 'action',
@@ -173,7 +182,7 @@ const PLAYING_CARD_DEFS = [
     type: 'action',
     count: 1,
     needsTarget: false,
-    description: 'Discard your hand and draw 7 new playing cards. Also completes Wizard if you hold that goal.',
+    description: "Destroy every player's current goal cards, then deal each player the same number of replacement goals. Also completes Wizard if you hold that goal.",
   },
 ];
 
@@ -275,20 +284,20 @@ const GOAL_CARD_DEFS = [
     custom: 'usedOracleOrRenewal',
   },
   {
-    key: 'tradeSaboteur',
-    name: 'Trade Saboteur',
-    count: 2,
-    points: 2,
-    description: 'Use I Think Not or Absolutely Not on a Binding Contract.',
-    custom: 'stoppedBindingContract',
-  },
-  {
     key: 'jeweller',
     name: 'Jeweller',
     count: 2,
     points: 2,
     description: 'Get 1x Diamond or 1x Gold in your storage.',
     anyRequirement: [{ diamond: 1 }, { gold: 1 }],
+  },
+  {
+    key: 'fishingForGold',
+    name: 'Fishing for Gold',
+    count: 2,
+    points: 3,
+    description: 'Use Magic Hand to take a Gold or Diamond from the discard pile.',
+    custom: 'fishingForGold',
   },
   {
     key: 'jewelleryCollector',
@@ -344,7 +353,15 @@ const GOAL_CARD_DEFS = [
     count: 1,
     points: 5,
     description: 'Get 7 action cards in your hand and reveal them to all other players.',
-    custom: 'sevenActionsInHand',
+    specialCompletion: 'actionReady',
+  },
+  {
+    key: 'meditator',
+    name: 'Meditator',
+    count: 1,
+    points: 3,
+    description: 'Discard exactly 4 action cards from your hand to complete this goal.',
+    specialCompletion: 'meditator',
   },
   {
     key: 'royalty',
@@ -391,6 +408,8 @@ module.exports = function(io) {
         leader: playerName,
         started: false,
         winner: null,
+        winners: [],
+        winReason: null,
         currentPlayerIndex: 0,
         playDeck: [],
         playDiscard: [],
@@ -577,6 +596,22 @@ module.exports = function(io) {
       broadcastGameState(room);
     });
 
+    socket.on('complete-action-ready', (room, payload) => {
+      const roomData = rooms[room];
+      if (!roomData) return;
+      const result = completeActionReady(roomData, socket.id, payload || {});
+      if (!result.ok) socket.emit('game-error', result.message);
+      broadcastGameState(room);
+    });
+
+    socket.on('complete-meditator', (room, payload) => {
+      const roomData = rooms[room];
+      if (!roomData) return;
+      const result = completeMeditator(roomData, socket.id, payload || {});
+      if (!result.ok) socket.emit('game-error', result.message);
+      broadcastGameState(room);
+    });
+
     socket.on('create-trade', (room, payload) => {
       const roomData = rooms[room];
       if (!roomData) return;
@@ -708,6 +743,8 @@ function startGame(roomData) {
   clearRoomTimers(roomData);
   roomData.started = true;
   roomData.winner = null;
+  roomData.winners = [];
+  roomData.winReason = null;
   roomData.currentPlayerIndex = 0;
   roomData.playDeck = buildDeck(PLAYING_CARD_DEFS);
   roomData.goalDeck = buildDeck(GOAL_CARD_DEFS);
@@ -844,20 +881,14 @@ function playCard(roomData, socketId, payload) {
   if (!validation.ok) return validation;
 
   const [playedCard] = player.hand.splice(cardIndex, 1);
-  const pendingId = makeEventId(roomData, 'action');
-  const expiresAt = Date.now() + ACTION_REACTION_WINDOW_MS;
-  roomData.pendingAction = {
-    id: pendingId,
+  roomData.pendingAction = createTimedPendingAction(roomData, {
     actorName: player.name,
     card: playedCard,
     payload: actionPayload,
-    startedAt: Date.now(),
-    expiresAt,
-    timer: setTimeout(() => finalizePendingAction(roomData, pendingId), ACTION_REACTION_WINDOW_MS),
-  };
+  });
   player.actionPlayed = true;
-  roomData.log.push(`${player.name} played ${playedCard.name}. Waiting ${ACTION_REACTION_WINDOW_MS / 1000}s for I Think Not or Absolutely Not.`);
-  pushNotice(roomData, `${playedCard.name} is pending. Reaction window open.`, 'reaction');
+  roomData.log.push(`${player.name} played ${playedCard.name}.`);
+  pushNotice(roomData, `${playedCard.name} is pending.`, 'reaction');
   return ok();
 }
 
@@ -870,32 +901,149 @@ function playCancelReaction(roomData, player, cardIndex, card) {
     return fail('You cannot cancel your own pending action.');
   }
 
-  clearTimeout(pending.timer);
-  const actor = roomData.players.find((p) => p.name === pending.actorName);
+  if (card.key === 'absolutelyNot') {
+    return playAbsolutelyNotReaction(roomData, player, cardIndex, pending);
+  }
+
+  return playIThinkNotReaction(roomData, player, cardIndex, pending);
+}
+
+function playIThinkNotReaction(roomData, player, cardIndex, pending) {
+  clearPendingTimer(pending);
+  const targetPending = detachPendingAction(pending);
   const [reactionCard] = player.hand.splice(cardIndex, 1);
-  roomData.playDiscard.push(reactionCard, pending.card);
-  if (actor) actor.actionPlayed = false;
+
+  roomData.pendingAction = createTimedPendingAction(roomData, {
+    actorName: player.name,
+    card: reactionCard,
+    payload: {},
+    targetPending,
+  }, 'reaction');
+
+  roomData.log.push(`${player.name} played ${reactionCard.name} on ${targetPending.card.name}.`);
+  pushNotice(roomData, `${reactionCard.name} is targeting ${targetPending.card.name}.`, 'reaction');
+  return ok();
+}
+
+function playAbsolutelyNotReaction(roomData, player, cardIndex, pending) {
+  clearPendingTimer(pending);
+  const targetPending = detachPendingAction(pending);
+  const [reactionCard] = player.hand.splice(cardIndex, 1);
+  roomData.playDiscard.push(reactionCard);
   roomData.pendingAction = null;
 
-  player.flags = player.flags || {};
-  if (pending.card.key === 'bindingContract') player.flags.stoppedBindingContract = true;
-  if (pending.card.key === 'itsAScam') player.flags.stoppedScam = true;
-
-  roomData.log.push(`${player.name} played ${reactionCard.name}, cancelling ${pending.card.name} from ${pending.actorName}. ${pending.actorName} may play another action this turn.`);
-  pushNotice(roomData, `${reactionCard.name} cancelled ${pending.card.name}.`, 'reaction');
+  roomData.log.push(`${player.name} played ${reactionCard.name} on ${targetPending.card.name}.`);
+  pushNotice(roomData, `${reactionCard.name} cancelled ${targetPending.card.name}. No counterplay.`, 'reaction');
+  cancelPendingCard(roomData, targetPending, {
+    restoreMode: 'immediate',
+    cancellingPlayer: player,
+    uncounterable: true,
+  });
   autoCompleteAllGoals(roomData);
   return ok();
 }
 
-function finalizePendingAction(roomData, pendingId) {
-  const pending = roomData.pendingAction;
-  if (!pending || pending.id !== pendingId) return;
+function createTimedPendingAction(roomData, pendingData, prefix = 'action') {
+  const pendingId = makeEventId(roomData, prefix);
+  const startedAt = Date.now();
+  const pending = {
+    ...pendingData,
+    id: pendingId,
+    startedAt,
+    expiresAt: startedAt + ACTION_REACTION_WINDOW_MS,
+  };
+  pending.timer = setTimeout(() => finalizePendingAction(roomData, pendingId), ACTION_REACTION_WINDOW_MS);
+  return pending;
+}
 
+function clearPendingTimer(pending) {
+  if (!pending) return;
+  if (pending.timer) clearTimeout(pending.timer);
+  if (pending.targetPending) clearPendingTimer(pending.targetPending);
+}
+
+function detachPendingAction(pending) {
+  if (!pending) return null;
+  const { timer, ...rest } = pending;
+  return {
+    ...rest,
+    payload: { ...(pending.payload || {}) },
+    targetPending: pending.targetPending ? detachPendingAction(pending.targetPending) : null,
+  };
+}
+
+function restorePendingActionWithWindow(roomData, pending, noticeText = null) {
+  const restored = createTimedPendingAction(roomData, {
+    ...detachPendingAction(pending),
+    payload: { ...(pending.payload || {}) },
+  }, pending.card?.key === 'iThinkNot' ? 'reaction' : 'action');
+  roomData.pendingAction = restored;
+  if (noticeText) pushNotice(roomData, noticeText, 'reaction');
+}
+
+function cancelPendingCard(roomData, targetPending, options = {}) {
+  if (!targetPending?.card) return;
+
+  roomData.playDiscard.push(targetPending.card);
+  const cancellingPlayer = options.cancellingPlayer || null;
+  if (targetPending.card.key === 'itsAScam' && cancellingPlayer) {
+    cancellingPlayer.flags = cancellingPlayer.flags || {};
+    cancellingPlayer.flags.stoppedScam = true;
+  }
+
+  if (targetPending.card.key === 'iThinkNot' && targetPending.targetPending) {
+    const restoredPending = targetPending.targetPending;
+    if (options.restoreMode === 'immediate') {
+      roomData.log.push(`${targetPending.card.name} was cancelled. ${restoredPending.card.name} resolves now.`);
+      resolvePendingImmediately(roomData, restoredPending);
+    } else {
+      roomData.log.push(`${targetPending.card.name} was cancelled. ${restoredPending.card.name} is pending again.`);
+      restorePendingActionWithWindow(
+        roomData,
+        restoredPending,
+        `${targetPending.card.name} was cancelled. ${restoredPending.card.name} is pending again.`
+      );
+    }
+    return;
+  }
+
+  const actor = roomData.players.find((p) => p.name === targetPending.actorName);
+  if (actor && targetPending.card.type === 'action') actor.actionPlayed = false;
+  roomData.pendingAction = null;
+}
+
+function resolvePendingImmediately(roomData, pending) {
+  if (!pending?.card) return;
+  clearPendingTimer(pending);
+  if (pending.card.key === 'iThinkNot') {
+    roomData.playDiscard.push(pending.card);
+    if (pending.targetPending) {
+      roomData.log.push(`${pending.actorName}'s ${pending.card.name} cancelled ${pending.targetPending.card.name}.`);
+      cancelPendingCard(roomData, pending.targetPending, { restoreMode: 'immediate' });
+    }
+    return;
+  }
+  resolveStandardPendingAction(roomData, pending);
+}
+
+function resolveIThinkNotPending(roomData, pending, restoreMode = 'window') {
+  roomData.playDiscard.push(pending.card);
+  if (!pending.targetPending) {
+    roomData.log.push(`${pending.actorName}'s ${pending.card.name} had nothing to cancel.`);
+    roomData.pendingAction = null;
+    return;
+  }
+
+  roomData.log.push(`${pending.actorName}'s ${pending.card.name} cancelled ${pending.targetPending.card.name}.`);
+  pushNotice(roomData, `${pending.card.name} cancelled ${pending.targetPending.card.name}.`, 'reaction');
+  cancelPendingCard(roomData, pending.targetPending, { restoreMode });
+}
+
+function resolveStandardPendingAction(roomData, pending) {
   roomData.pendingAction = null;
   const actor = roomData.players.find((p) => p.name === pending.actorName);
   if (!actor) {
     roomData.playDiscard.push(pending.card);
-    emitGameState(roomData);
     return;
   }
 
@@ -905,7 +1053,6 @@ function finalizePendingAction(roomData, pendingId) {
     actor.hand.push(pending.card);
     roomData.log.push(`${pending.card.name} could not resolve for ${actor.name}: ${result.message}`);
     pushNotice(roomData, `${pending.card.name} fizzled and returned to ${actor.name}.`, 'warning');
-    emitGameState(roomData);
     return;
   }
 
@@ -914,6 +1061,19 @@ function finalizePendingAction(roomData, pendingId) {
   roomData.log.push(`${actor.name}'s ${pending.card.name} resolved${result.logSuffix || ''}.`);
   if (!roomData.pendingChoice) pushNotice(roomData, `${actor.name}'s ${pending.card.name} resolved.`, 'action');
   markGoalFlags(roomData, actor, pending.card, pending.payload);
+}
+
+function finalizePendingAction(roomData, pendingId) {
+  const pending = roomData.pendingAction;
+  if (!pending || pending.id !== pendingId) return;
+
+  roomData.pendingAction = null;
+  if (pending.card.key === 'iThinkNot') {
+    resolveIThinkNotPending(roomData, pending, 'window');
+  } else {
+    resolveStandardPendingAction(roomData, pending);
+  }
+
   autoCompleteAllGoals(roomData);
   emitGameState(roomData);
 }
@@ -929,6 +1089,20 @@ function validateActionCanBegin(roomData, player, card, payload) {
         return fail('That storage card is no longer available.');
       }
       return ok();
+
+    case 'sabotage': {
+      if (!target || target.name === player.name) return fail('Choose another player to sabotage.');
+      const discardable = target.storage.filter(canSabotageDiscard);
+      if (discardable.length === 0) return fail(`${target.name} has no discardable storage cards.`);
+      const sabotageCardIds = uniqueIds(payload.sabotageCardIds);
+      if (sabotageCardIds.length < 1 || sabotageCardIds.length > 2) return fail('Choose 1 or 2 storage cards to sabotage.');
+      for (const cardId of sabotageCardIds) {
+        const selected = target.storage.find((stored) => stored.id === cardId);
+        if (!selected) return fail('One selected storage card is no longer available.');
+        if (!canSabotageDiscard(selected)) return fail('Sabotage cannot discard Gold or Diamond.');
+      }
+      return ok();
+    }
 
     case 'robbery':
       if (!target || target.name === player.name) return fail('Choose another player to rob.');
@@ -977,6 +1151,25 @@ function resolveAction(roomData, player, card, payload) {
       return ok(` and stole ${stolen.name} from ${target.name}'s storage`);
     }
 
+    case 'sabotage': {
+      if (!target || target.name === player.name) return fail('Choose another player to sabotage.');
+      const sabotageCardIds = uniqueIds(payload.sabotageCardIds);
+      if (sabotageCardIds.length < 1 || sabotageCardIds.length > 2) return fail('Choose 1 or 2 storage cards to sabotage.');
+
+      const discarded = [];
+      for (const cardId of sabotageCardIds) {
+        const discardIndex = target.storage.findIndex((stored) => stored.id === cardId);
+        if (discardIndex === -1) return fail('One selected storage card is no longer available.');
+        const selected = target.storage[discardIndex];
+        if (!canSabotageDiscard(selected)) return fail('Sabotage cannot discard Gold or Diamond.');
+        const [discardedCard] = target.storage.splice(discardIndex, 1);
+        roomData.playDiscard.push(discardedCard);
+        discarded.push(discardedCard);
+      }
+
+      return ok(` and sabotaged ${formatCardList(discarded)} from ${target.name}'s storage`);
+    }
+
     case 'robbery': {
       if (!target || target.name === player.name) return fail('Choose another player to rob.');
       if (target.hand.length === 0) return fail(`${target.name} has no cards in hand.`);
@@ -1016,21 +1209,46 @@ function resolveAction(roomData, player, card, payload) {
     }
 
     case 'totalRenewal': {
-      roomData.playDiscard.push(...player.hand.splice(0, player.hand.length));
-      player.hand.push(...drawMany(roomData, 'play', 7));
-      return ok(' and renewed their hand');
+      const renewalPlans = [];
+      const destroyedSummary = [];
+
+      for (const targetPlayer of roomData.players) {
+        const destroyedGoals = targetPlayer.goals.splice(0, targetPlayer.goals.length);
+        if (destroyedGoals.length === 0) {
+          destroyedSummary.push(`0 from ${targetPlayer.name}`);
+          continue;
+        }
+        roomData.goalDiscard.push(...destroyedGoals);
+        renewalPlans.push({ player: targetPlayer, count: destroyedGoals.length });
+        destroyedSummary.push(`${destroyedGoals.length} from ${targetPlayer.name}`);
+      }
+
+      for (const plan of renewalPlans) {
+        for (let index = 0; index < plan.count; index += 1) {
+          if (roomData.winner) break;
+          const replacement = drawCard(roomData, 'goal');
+          if (replacement) plan.player.goals.push(replacement);
+        }
+        if (roomData.winner) break;
+      }
+
+      return ok(` and renewed every player's goals (${destroyedSummary.join(', ')})`);
     }
 
     case 'absoluteCalamity': {
-      let hits = 0;
-      for (const other of roomData.players) {
-        if (other.name === player.name || other.hand.length === 0) continue;
-        const discardIndex = Math.floor(Math.random() * other.hand.length);
-        const [discarded] = other.hand.splice(discardIndex, 1);
+      const selectionResult = normaliseCalamitySelections(roomData, payload);
+      if (!selectionResult.ok) return selectionResult;
+      const discardedNames = [];
+      for (const selection of selectionResult.selections) {
+        const targetPlayer = roomData.players.find((candidate) => candidate.name === selection.playerName);
+        if (!targetPlayer) return fail('One of the selected players is no longer available.');
+        const discardIndex = targetPlayer.storage.findIndex((stored) => stored.id === selection.cardId);
+        if (discardIndex === -1) return fail(`${selection.playerName}'s selected storage card is no longer available.`);
+        const [discarded] = targetPlayer.storage.splice(discardIndex, 1);
         roomData.playDiscard.push(discarded);
-        hits++;
+        discardedNames.push(`${discarded.name} from ${selection.playerName}`);
       }
-      return ok(` and forced ${hits} player${hits === 1 ? '' : 's'} to discard a random card`);
+      return ok(` and discarded ${discardedNames.join(', ')} from storage`);
     }
 
     case 'goalRemoval': {
@@ -1073,21 +1291,17 @@ function createTrade(roomData, socketId, payload) {
   const target = targetName ? roomData.players.find((p) => p.name === targetName) : null;
   if (targetName && (!target || target.name === player.name)) return fail('Choose a valid trade target, or offer to everyone.');
 
-  const offerIds = uniqueIds(payload.cardIds).slice(0, 4);
-  if (offerIds.length > 4) return fail('You can offer up to 4 cards.');
+  const offer = getTradeOffer(player, payload);
+  if (!offer.ok) return offer;
 
-  const offeredCards = collectCardsByIds(player.hand, offerIds);
-  if (!offeredCards.ok) return fail('Every offered card must be in your hand.');
-
-  let bindingCard = null;
   const useBinding = Boolean(payload.useBinding);
   if (useBinding) {
-    const offeredIdSet = new Set(offerIds);
-    const bindingIndex = player.hand.findIndex((card) => card.key === 'bindingContract' && !offeredIdSet.has(card.id));
+    const offeredHandIdSet = new Set(offer.handIds);
+    const bindingIndex = player.hand.findIndex((card) => card.key === 'bindingContract' && !offeredHandIdSet.has(card.id));
     if (bindingIndex === -1) return fail('You need an unused Binding Contract in hand to protect this trade.');
-    [bindingCard] = player.hand.splice(bindingIndex, 1);
+    const [bindingCard] = player.hand.splice(bindingIndex, 1);
     roomData.playDiscard.push(bindingCard);
-    roomData.log.push(`${player.name} spent Binding Contract to protect a trade offer.`);
+    roomData.log.push(`${player.name} used Binding Contract.`);
   }
 
   roomData.activeTrade = {
@@ -1096,12 +1310,22 @@ function createTrade(roomData, socketId, payload) {
     initiatorName: player.name,
     targetName: target?.name || null,
     responderName: null,
-    initiatorOfferIds: offerIds,
+    initiatorOfferIds: offer.handIds,
+    initiatorStorageOfferIds: offer.storageIds,
     responderOfferIds: [],
-    initiatorOfferSnapshot: offeredCards.cards,
+    responderStorageOfferIds: [],
+    initiatorOfferSnapshot: offer.cards,
+    initiatorOfferHandSnapshot: offer.handPreviewCards,
+    initiatorOfferStorageSnapshot: offer.storagePreviewCards,
     responderOfferSnapshot: [],
+    responderOfferHandSnapshot: [],
+    responderOfferStorageSnapshot: [],
     initiatorOfferCards: [],
     responderOfferCards: [],
+    initiatorOfferHandCards: [],
+    initiatorOfferStorageCards: [],
+    responderOfferHandCards: [],
+    responderOfferStorageCards: [],
     bindingUsed: useBinding,
     scamsPlayed: {},
     createdAt: Date.now(),
@@ -1110,8 +1334,10 @@ function createTrade(roomData, socketId, payload) {
   };
 
   const recipient = target ? target.name : 'the table';
-  roomData.log.push(`${player.name} offered a trade to ${recipient}: ${formatCardList(offeredCards.cards)}.`);
-  pushNotice(roomData, `${player.name} opened a trade offer.`, 'trade');
+  roomData.log.push(`${player.name} offered ${formatCardList(offer.cards)} to ${recipient}.`);
+  pushNotice(roomData, useBinding
+    ? `${player.name} opened a protected trade.`
+    : `${player.name} opened a trade offer.`, 'trade');
   return ok();
 }
 
@@ -1124,16 +1350,18 @@ function respondTrade(roomData, socketId, payload) {
   if (trade.targetName && trade.targetName !== player.name) return fail('This trade offer was not made to you.');
   if (player.mustDiscard) return fail('You cannot respond while discarding.');
 
-  const offerIds = uniqueIds(payload.cardIds).slice(0, 4);
-  const offeredCards = collectCardsByIds(player.hand, offerIds);
-  if (!offeredCards.ok) return fail('Every response card must be in your hand.');
+  const offer = getTradeOffer(player, payload);
+  if (!offer.ok) return offer;
 
   trade.state = 'configured';
   trade.responderName = player.name;
-  trade.responderOfferIds = offerIds;
-  trade.responderOfferSnapshot = offeredCards.cards;
-  roomData.log.push(`${player.name} responded to ${trade.initiatorName}'s trade with ${formatCardList(offeredCards.cards)}.`);
-  pushNotice(roomData, `${player.name} configured a trade response.`, 'trade');
+  trade.responderOfferIds = offer.handIds;
+  trade.responderStorageOfferIds = offer.storageIds;
+  trade.responderOfferSnapshot = offer.cards;
+  trade.responderOfferHandSnapshot = offer.handPreviewCards;
+  trade.responderOfferStorageSnapshot = offer.storagePreviewCards;
+  roomData.log.push(`${player.name} responded with ${formatCardList(offer.cards)}.`);
+  pushNotice(roomData, `${player.name} responded to the trade.`, 'trade');
   return ok();
 }
 
@@ -1148,35 +1376,42 @@ function acceptTrade(roomData, socketId) {
   const responder = roomData.players.find((p) => p.name === trade.responderName);
   if (!responder) return fail('The responding player is no longer available.');
 
-  const initiatorCards = removeCardsByIds(initiator.hand, trade.initiatorOfferIds);
+  const initiatorCards = removeTradeOffer(initiator, trade.initiatorOfferIds, trade.initiatorStorageOfferIds || []);
   if (!initiatorCards.ok) {
     roomData.activeTrade = null;
     return fail('Your offered cards are no longer available, so the trade was cancelled.');
   }
 
-  const responderCards = removeCardsByIds(responder.hand, trade.responderOfferIds);
+  const responderCards = removeTradeOffer(responder, trade.responderOfferIds, trade.responderStorageOfferIds || []);
   if (!responderCards.ok) {
-    initiator.hand.push(...initiatorCards.cards);
+    initiator.hand.push(...initiatorCards.handCards);
+    initiator.storage.push(...initiatorCards.storageCards);
     roomData.activeTrade = null;
     return fail(`${responder.name}'s offered cards are no longer available, so the trade was cancelled.`);
   }
 
-  initiator.hand.push(...responderCards.cards);
-  responder.hand.push(...initiatorCards.cards);
+  initiator.hand.push(...responderCards.handCards);
+  responder.hand.push(...initiatorCards.handCards);
+  initiator.storage.push(...responderCards.storageCards);
+  responder.storage.push(...initiatorCards.storageCards);
   initiator.tradeUsed = true;
 
-  trade.initiatorOfferCards = initiatorCards.cards;
-  trade.responderOfferCards = responderCards.cards;
+  trade.initiatorOfferHandCards = initiatorCards.handCards;
+  trade.initiatorOfferStorageCards = initiatorCards.storageCards;
+  trade.responderOfferHandCards = responderCards.handCards;
+  trade.responderOfferStorageCards = responderCards.storageCards;
+  trade.initiatorOfferCards = [...initiatorCards.handCards, ...initiatorCards.storageCards];
+  trade.responderOfferCards = [...responderCards.handCards, ...responderCards.storageCards];
   trade.state = 'accepted';
-  roomData.log.push(`${initiator.name} accepted the trade with ${responder.name}.`);
+  roomData.log.push(`${initiator.name} accepted ${responder.name}'s trade.`);
 
   if (trade.bindingUsed) {
     initiator.flags = initiator.flags || {};
     responder.flags = responder.flags || {};
     initiator.flags.cleanTrade = true;
     responder.flags.cleanTrade = true;
-    roomData.log.push('The Binding Contract prevented any scam window.');
-    pushNotice(roomData, 'Trade completed under Binding Contract. No scams allowed.', 'trade');
+    roomData.log.push('Binding Contract: no scam window.');
+    pushNotice(roomData, 'Protected trade completed.', 'trade');
     roomData.activeTrade = null;
     autoCompleteAllGoals(roomData);
     return ok();
@@ -1185,8 +1420,8 @@ function acceptTrade(roomData, socketId) {
   trade.state = 'scamWindow';
   trade.scamEndsAt = Date.now() + TRADE_SCAM_WINDOW_MS;
   trade.timer = setTimeout(() => finalizeScamWindow(roomData, trade.id), TRADE_SCAM_WINDOW_MS);
-  roomData.log.push(`Scam window opened for ${initiator.name} and ${responder.name}.`);
-  pushNotice(roomData, `Trade accepted. ${TRADE_SCAM_WINDOW_MS / 1000}s scam window open.`, 'trade');
+  roomData.log.push('Scam window opened.');
+  pushNotice(roomData, `Trade accepted. ${TRADE_SCAM_WINDOW_MS / 1000}s scam window.`, 'trade');
   return ok();
 }
 
@@ -1198,7 +1433,7 @@ function declineTrade(roomData, socketId) {
   if (trade.state === 'scamWindow') return fail('The trade was already accepted. Wait for the scam window to close.');
   if (![trade.initiatorName, trade.responderName].includes(player.name)) return fail('You are not part of this trade.');
 
-  roomData.log.push(`${player.name} cancelled the active trade.`);
+  roomData.log.push(`${player.name} cancelled the trade.`);
   pushNotice(roomData, `${player.name} cancelled the trade.`, 'trade');
   roomData.activeTrade = null;
   return ok();
@@ -1248,10 +1483,12 @@ function finalizeScamWindow(roomData, tradeId) {
   const responderScammed = Boolean(trade.scamsPlayed[responder.name]);
 
   if (initiatorScammed) {
-    moveCardsByIds(responder.hand, initiator.hand, trade.initiatorOfferCards.map((card) => card.id));
+    moveCardsByIds(responder.hand, initiator.hand, (trade.initiatorOfferHandCards || []).map((card) => card.id));
+    moveCardsByIds(responder.storage, initiator.storage, (trade.initiatorOfferStorageCards || []).map((card) => card.id));
   }
   if (responderScammed) {
-    moveCardsByIds(initiator.hand, responder.hand, trade.responderOfferCards.map((card) => card.id));
+    moveCardsByIds(initiator.hand, responder.hand, (trade.responderOfferHandCards || []).map((card) => card.id));
+    moveCardsByIds(initiator.storage, responder.storage, (trade.responderOfferStorageCards || []).map((card) => card.id));
   }
 
   if (!initiatorScammed && !responderScammed) {
@@ -1294,6 +1531,15 @@ function chooseDiscardCard(roomData, socketId, payload) {
 
   const [chosen] = roomData.playDiscard.splice(discardIndex, 1);
   player.hand.push(chosen);
+  if (chosen.key === 'gold' || chosen.key === 'diamond') {
+    player.flags = player.flags || {};
+    const previousFishingCount = typeof player.flags.fishingForGold === 'number'
+      ? player.flags.fishingForGold
+      : player.flags.fishingForGold
+        ? 1
+        : 0;
+    player.flags.fishingForGold = previousFishingCount + 1;
+  }
   roomData.pendingChoice = null;
   roomData.log.push(`${player.name} took ${chosen.name} from the discard pile with Magic Hand.`);
   pushNotice(roomData, `${player.name} took a card from the discard pile.`, 'choice');
@@ -1365,6 +1611,12 @@ function claimGoal(roomData, socketId, payload) {
   if (goal.key === 'investor') {
     return fail('Use the Investor modal to complete this goal.');
   }
+  if (goal.key === 'action-ready') {
+    return fail('Use the Action-Ready modal to reveal 7 action cards.');
+  }
+  if (goal.key === 'meditator') {
+    return fail('Use the Meditator modal to discard exactly 4 action cards.');
+  }
 
   return fail('This goal is completed automatically when its conditions are met.');
 }
@@ -1408,6 +1660,93 @@ function completeInvestor(roomData, socketId, payload) {
   return ok();
 }
 
+function completeActionReady(roomData, socketId, payload) {
+  const player = roomData.players.find((p) => p.socketId === socketId);
+  if (!player) return fail('You are not in this room.');
+  if (roomData.winner) return fail('The game is already over.');
+  if (roomData.pendingAction) return fail('Wait for the current action to resolve first.');
+  if (roomData.pendingChoice) return fail('Finish the current card choice first.');
+  if (roomData.activeTrade) return fail('Finish or cancel the active trade first.');
+  if (currentPlayer(roomData)?.name !== player.name) return fail('You can complete Action-Ready only on your turn.');
+
+  const goalIndex = Number(payload.goalIndex);
+  if (!Number.isInteger(goalIndex) || goalIndex < 0 || goalIndex >= player.goals.length) {
+    return fail('Choose your Action-Ready goal.');
+  }
+
+  const goal = player.goals[goalIndex];
+  if (goal.key !== 'action-ready') return fail('That goal is not Action-Ready.');
+
+  const availableActionCards = player.hand.filter((card) => card.type === 'action');
+  if (availableActionCards.length < 7) return fail('Action-Ready needs at least 7 action cards in your hand.');
+
+  const actionCardIds = uniqueIds(payload.actionCardIds);
+  if (actionCardIds.length !== 7) return fail('Choose exactly 7 action cards to reveal.');
+
+  const selectedCards = [];
+  for (const id of actionCardIds) {
+    const card = player.hand.find((handCard) => handCard.id === id);
+    if (!card || card.type !== 'action') return fail('Every revealed card must be an action card from your hand.');
+    selectedCards.push(card);
+  }
+
+  const revealId = makeEventId(roomData, 'reveal');
+  const revealCards = selectedCards.map((card) => ({ ...card }));
+  for (const viewer of roomData.players) {
+    viewer.privateReveal = {
+      id: revealId,
+      type: 'actionReadyReveal',
+      actorName: player.name,
+      cards: revealCards,
+      createdAt: Date.now(),
+    };
+  }
+
+  completeGoal(roomData, player, goalIndex, undefined, ' by revealing 7 action cards');
+  roomData.log.push(`${player.name} revealed 7 action cards for Action-Ready.`);
+  autoCompleteAllGoals(roomData);
+  return ok();
+}
+
+function completeMeditator(roomData, socketId, payload) {
+  const player = roomData.players.find((p) => p.socketId === socketId);
+  if (!player) return fail('You are not in this room.');
+  if (roomData.winner) return fail('The game is already over.');
+  if (roomData.pendingAction) return fail('Wait for the current action to resolve first.');
+  if (roomData.pendingChoice) return fail('Finish the current card choice first.');
+  if (roomData.activeTrade) return fail('Finish or cancel the active trade first.');
+  if (currentPlayer(roomData)?.name !== player.name) return fail('You can complete Meditator only on your turn.');
+
+  const goalIndex = Number(payload.goalIndex);
+  if (!Number.isInteger(goalIndex) || goalIndex < 0 || goalIndex >= player.goals.length) {
+    return fail('Choose your Meditator goal.');
+  }
+
+  const goal = player.goals[goalIndex];
+  if (goal.key !== 'meditator') return fail('That goal is not Meditator.');
+
+  const availableActionCards = player.hand.filter((card) => card.type === 'action');
+  if (availableActionCards.length < 4) return fail('Meditator needs at least 4 action cards in your hand.');
+
+  const actionCardIds = uniqueIds(payload.actionCardIds);
+  if (actionCardIds.length !== 4) return fail('Choose exactly 4 action cards to discard.');
+
+  const selectedCards = [];
+  for (const id of actionCardIds) {
+    const card = player.hand.find((handCard) => handCard.id === id);
+    if (!card || card.type !== 'action') return fail('Every discarded card must be an action card from your hand.');
+    selectedCards.push(card);
+  }
+
+  const selectedIdSet = new Set(actionCardIds);
+  player.hand = player.hand.filter((card) => !selectedIdSet.has(card.id));
+  roomData.playDiscard.push(...selectedCards);
+
+  completeGoal(roomData, player, goalIndex, undefined, ' by discarding 4 action cards');
+  autoCompleteAllGoals(roomData);
+  return ok();
+}
+
 function calculateInvestorPoints(moneyCount) {
   return Math.max(1, moneyCount - 1);
 }
@@ -1415,6 +1754,15 @@ function calculateInvestorPoints(moneyCount) {
 function completeGoal(roomData, player, goalIndex, scoreOverride, logDetail = '') {
   const [completed] = player.goals.splice(goalIndex, 1);
   const points = Number.isFinite(scoreOverride) ? scoreOverride : completed.points || 1;
+  if (completed.custom === 'fishingForGold' && player.flags) {
+    const fishingCount = typeof player.flags.fishingForGold === 'number'
+      ? player.flags.fishingForGold
+      : player.flags.fishingForGold
+        ? 1
+        : 0;
+    player.flags.fishingForGold = Math.max(0, fishingCount - 1);
+  }
+
   player.score += points;
   if (!player.completedGoals) player.completedGoals = [];
   player.completedGoals.push({ ...completed, pointsAwarded: points });
@@ -1424,8 +1772,7 @@ function completeGoal(roomData, player, goalIndex, scoreOverride, logDetail = ''
   roomData.log.push(`${player.name} completed ${completed.name}${logDetail} for ${points} point${points === 1 ? '' : 's'}.`);
   pushNotice(roomData, `${player.name} completed ${completed.name} for ${points} point${points === 1 ? '' : 's'}.`, 'goal');
   if (player.score >= 10 && !roomData.winner) {
-    roomData.winner = player.name;
-    clearRoomTimers(roomData);
+    finishGame(roomData, [player.name], 'points');
     roomData.log.push(`${player.name} wins Machiavellian Pursuits!`);
   }
 }
@@ -1474,8 +1821,13 @@ function canCompleteGoal(player, goal) {
     return uniqueResources.size >= 7;
   }
 
-  if (goal.custom === 'sevenActionsInHand') {
-    return player.hand.filter((c) => c.type === 'action').length >= 7;
+  if (goal.custom === 'fishingForGold') {
+    const fishingCount = typeof player.flags?.fishingForGold === 'number'
+      ? player.flags.fishingForGold
+      : player.flags?.fishingForGold
+        ? 1
+        : 0;
+    return fishingCount > 0;
   }
 
   if (goal.custom) return Boolean(player.flags?.[goal.custom]);
@@ -1516,10 +1868,39 @@ function drawCard(roomData, deckType) {
   const discardKey = deckType === 'goal' ? 'goalDiscard' : 'playDiscard';
 
   if (roomData[deckKey].length === 0) {
+    if (deckType === 'goal') {
+      finishByGoalDeckDepletion(roomData);
+      return null;
+    }
     roomData[deckKey] = shuffle(roomData[discardKey].splice(0));
   }
 
-  return roomData[deckKey].pop() || null;
+  const card = roomData[deckKey].pop() || null;
+  if (deckType === 'goal' && roomData[deckKey].length === 0) {
+    finishByGoalDeckDepletion(roomData);
+  }
+  return card;
+}
+
+function finishByGoalDeckDepletion(roomData) {
+  if (!roomData || roomData.winner || !roomData.started) return;
+  const highScore = Math.max(...roomData.players.map((player) => player.score || 0));
+  const winners = roomData.players.filter((player) => (player.score || 0) === highScore).map((player) => player.name);
+  finishGame(roomData, winners, 'goalDeckDepleted');
+  if (winners.length === 1) {
+    roomData.log.push(`The goal deck was depleted. ${winners[0]} wins with ${highScore} point${highScore === 1 ? '' : 's'}.`);
+  } else {
+    roomData.log.push(`The goal deck was depleted. ${winners.join(' and ')} tie with ${highScore} point${highScore === 1 ? '' : 's'}.`);
+  }
+}
+
+function finishGame(roomData, winners, reason) {
+  if (!roomData || roomData.winner) return;
+  const winnerNames = winners.length ? winners : roomData.players.map((player) => player.name);
+  roomData.winners = winnerNames;
+  roomData.winReason = reason;
+  roomData.winner = winnerNames.length === 1 ? winnerNames[0] : `Tie: ${winnerNames.join(' and ')}`;
+  clearRoomTimers(roomData);
 }
 
 function buildDeck(defs) {
@@ -1566,6 +1947,8 @@ function getPublicGameState(roomData) {
     room: roomData.id,
     started: roomData.started,
     winner: roomData.winner,
+    winners: roomData.winners || (roomData.winner ? [roomData.winner] : []),
+    winReason: roomData.winReason || null,
     leader: roomData.leader,
     currentPlayerName: current?.name || null,
     pendingAction: sanitisePendingAction(roomData.pendingAction),
@@ -1613,6 +1996,7 @@ function getPrivatePlayerState(roomData, player) {
       ...goal,
       canComplete: canCompleteGoal(player, goal),
       investorMoneyAvailable: goal.key === 'investor' ? player.storage.filter((card) => card.key === 'money').length : 0,
+      actionCardsAvailable: ['action-ready', 'meditator'].includes(goal.key) ? player.hand.filter((card) => card.type === 'action').length : 0,
     })),
     actionPlayed: player.actionPlayed || false,
     goalRerolled: player.goalRerolled || false,
@@ -1659,6 +2043,9 @@ function sanitisePendingAction(pending) {
     actorName: pending.actorName,
     card: pending.card,
     targetName: pending.payload?.targetName || null,
+    counterTargetName: pending.targetPending?.card?.name || null,
+    counterTargetActorName: pending.targetPending?.actorName || null,
+    uncounterable: pending.card?.key === 'absolutelyNot',
     expiresAt: pending.expiresAt,
     startedAt: pending.startedAt,
   };
@@ -1683,7 +2070,11 @@ function sanitiseTrade(trade) {
     targetName: trade.targetName,
     responderName: trade.responderName,
     initiatorOffer: trade.initiatorOfferSnapshot || trade.initiatorOfferCards || [],
+    initiatorOfferHand: trade.initiatorOfferHandSnapshot || trade.initiatorOfferHandCards || [],
+    initiatorOfferStorage: trade.initiatorOfferStorageSnapshot || trade.initiatorOfferStorageCards || [],
     responderOffer: trade.responderOfferSnapshot || trade.responderOfferCards || [],
+    responderOfferHand: trade.responderOfferHandSnapshot || trade.responderOfferHandCards || [],
+    responderOfferStorage: trade.responderOfferStorageSnapshot || trade.responderOfferStorageCards || [],
     bindingUsed: trade.bindingUsed,
     scamsPlayed: Object.keys(trade.scamsPlayed || {}),
     createdAt: trade.createdAt,
@@ -1785,7 +2176,7 @@ function slimPlayer(roomData, player) {
 }
 
 function clearRoomTimers(roomData) {
-  if (roomData.pendingAction?.timer) clearTimeout(roomData.pendingAction.timer);
+  clearPendingTimer(roomData.pendingAction);
   if (roomData.activeTrade?.timer) clearTimeout(roomData.activeTrade.timer);
   roomData.pendingAction = null;
   roomData.activeTrade = null;
@@ -1804,6 +2195,87 @@ function pushNotice(roomData, text, type = 'info') {
 function makeEventId(roomData, prefix) {
   roomData.nextEventId = (roomData.nextEventId || 1) + 1;
   return `${prefix}-${roomData.nextEventId}`;
+}
+
+function getTradeOffer(player, payload) {
+  const handIds = uniqueIds(payload.cardIds);
+  const storageIds = uniqueIds(payload.storageCardIds);
+  const total = handIds.length + storageIds.length;
+  if (total > 4) return fail('You can offer up to 4 cards.');
+
+  const handCards = collectCardsByIds(player.hand, handIds);
+  if (!handCards.ok) return fail('Every hand offer card must still be in your hand.');
+
+  const storageCards = collectCardsByIds(player.storage, storageIds);
+  if (!storageCards.ok) return fail('Every storage offer card must still be in your storage.');
+
+  const handPreviewCards = handCards.cards.map((card) => ({ ...card, tradeZone: 'hand' }));
+  const storagePreviewCards = storageCards.cards.map((card) => ({ ...card, tradeZone: 'storage' }));
+
+  return {
+    ok: true,
+    handIds,
+    storageIds,
+    handCards: handCards.cards,
+    storageCards: storageCards.cards,
+    handPreviewCards,
+    storagePreviewCards,
+    cards: [...handPreviewCards, ...storagePreviewCards],
+  };
+}
+
+function removeTradeOffer(player, handIds, storageIds) {
+  const handCards = removeCardsByIds(player.hand, handIds);
+  if (!handCards.ok) return handCards;
+
+  const storageCards = removeCardsByIds(player.storage, storageIds);
+  if (!storageCards.ok) {
+    player.hand.push(...handCards.cards);
+    return storageCards;
+  }
+
+  return {
+    ok: true,
+    handCards: handCards.cards,
+    storageCards: storageCards.cards,
+    cards: [...handCards.cards, ...storageCards.cards],
+  };
+}
+
+function canSabotageDiscard(card) {
+  return Boolean(card && card.type === 'resource' && !SABOTAGE_PROTECTED_KEYS.has(card.key));
+}
+
+function normaliseCalamitySelections(roomData, payload) {
+  const requiredTargets = roomData.players
+    .map((player) => ({
+      player,
+      storage: (player.storage || []).filter((card) => card.type === 'resource'),
+    }))
+    .filter(({ storage }) => storage.length > 0);
+
+  if (requiredTargets.length === 0) return fail('No players have stored resources to discard.');
+
+  const rawSelections = Array.isArray(payload.calamityDiscards) ? payload.calamityDiscards : [];
+  const selectionMap = new Map();
+  for (const selection of rawSelections) {
+    const playerName = cleanName(selection?.playerName || '');
+    const cardId = String(selection?.cardId || '');
+    if (!playerName || !cardId) continue;
+    selectionMap.set(playerName, cardId);
+  }
+
+  const selections = [];
+  for (const { player, storage } of requiredTargets) {
+    const cardId = selectionMap.get(player.name);
+    if (!cardId) return fail(`Choose one stored resource from ${player.name}.`);
+    if (!storage.some((card) => card.id === cardId)) {
+      return fail(`${player.name}'s selected storage card is no longer available.`);
+    }
+    selections.push({ playerName: player.name, cardId });
+  }
+
+  return { ok: true, selections };
 }
 
 function collectCardsByIds(cards, ids) {

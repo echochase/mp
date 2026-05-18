@@ -66,7 +66,7 @@ export const HomePage = ({ socket }) => {
       sx={{ background: "var(--bg)" }}
     >
       <Fade in>
-        <Box mb={5} textAlign="center">
+        <Box mb={5} textAlign="center" sx={{ "@media (max-width: 760px)": { mb: 2.5 } }}>
           <Typography
             variant="h2"
             sx={{
@@ -78,6 +78,12 @@ export const HomePage = ({ socket }) => {
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
               mb: 1,
+              "@media (max-width: 760px)": {
+                fontSize: "clamp(1.15rem, 7vw, 1.75rem)",
+                lineHeight: 0.96,
+                letterSpacing: "0.02em",
+                px: 1,
+              },
             }}
           >
             Machiavellian Pursuits
@@ -94,7 +100,13 @@ export const HomePage = ({ socket }) => {
       </Fade>
 
       <Fade in timeout={300}>
-        <Stack spacing={2} width="100%" maxWidth="300px" alignItems="center">
+        <Stack
+          spacing={{ xs: 1.2, sm: 2 }}
+          width="100%"
+          maxWidth="300px"
+          alignItems="center"
+          sx={{ "@media (max-width: 760px)": { maxWidth: "260px" } }}
+        >
           {step === 1 ? (
             <>
               <Button variant="contained" fullWidth sx={containedSx} onClick={() => setStep(2)}>
