@@ -1,27 +1,9 @@
-import { useState } from "react";
+import { usePairedCardSelection } from "../../../hooks/useCardSelection.js";
 import { TradeOffer } from "../panels/TradeOffer.jsx";
 import { SelectableOfferGrid } from "./SelectableOfferGrid.jsx";
 
 export const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm }) => {
-  const [selectedHandIds, setSelectedHandIds] = useState([]);
-  const [selectedStorageIds, setSelectedStorageIds] = useState([]);
-  const selectedCount = selectedHandIds.length + selectedStorageIds.length;
-
-  const toggleHandCard = (id) => {
-    setSelectedHandIds((ids) => {
-      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (selectedCount >= 4) return ids;
-      return [...ids, id];
-    });
-  };
-
-  const toggleStorageCard = (id) => {
-    setSelectedStorageIds((ids) => {
-      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (selectedCount >= 4) return ids;
-      return [...ids, id];
-    });
-  };
+  const { selectedHandIds, selectedStorageIds, toggleHand, toggleStorage } = usePairedCardSelection(4);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -52,8 +34,8 @@ export const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm })
           storage={storage}
           selectedHandIds={selectedHandIds}
           selectedStorageIds={selectedStorageIds}
-          onToggleHand={toggleHandCard}
-          onToggleStorage={toggleStorageCard}
+          onToggleHand={toggleHand}
+          onToggleStorage={toggleStorage}
         />
 
         <button

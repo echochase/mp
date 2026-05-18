@@ -1,24 +1,29 @@
-import { useState } from "react";
+import { useCardSelection } from "../../../hooks/useCardSelection.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) => {
+export const ActionCardSelectionModal = ({
+  goal,
+  goalIndex,
+  hand,
+  requiredCount,
+  description,
+  confirmLabel,
+  confirmVariant = "gold-button",
+  onClose,
+  onConfirm,
+}) => {
   const actionCards = hand.filter((card) => card.type === "action");
-  const [selectedIds, setSelectedIds] = useState(() => actionCards.slice(0, 4).map((card) => card.id));
+  const [selectedIds, toggle] = useCardSelection(
+    () => actionCards.slice(0, requiredCount).map((card) => card.id),
+    requiredCount
+  );
 
-  const toggleCard = (id) => {
-    setSelectedIds((ids) => {
-      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (ids.length >= 4) return ids;
-      return [...ids, id];
-    });
-  };
-
-  const hasEnoughActions = actionCards.length >= 4;
-  const canConfirm = hasEnoughActions && selectedIds.length === 4;
+  const hasEnough = actionCards.length >= requiredCount;
+  const canConfirm = hasEnough && selectedIds.length === requiredCount;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <section className="action-ready-modal meditator-modal" onClick={(event) => event.stopPropagation()}>
+      <section className="action-ready-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Special completion</p>
@@ -27,16 +32,16 @@ export const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) =>
           <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
         </div>
 
-        <p className="modal-description">
-          Select exactly 4 action cards to discard. These cards go to the discard pile, and Meditator scores 3 points only if all 4 are valid action cards.
-        </p>
+        <p className="modal-description">{description}</p>
 
-        {!hasEnoughActions && (
-          <p className="danger-note">You need at least 4 action cards in hand to complete Meditator.</p>
+        {!hasEnough && (
+          <p className="danger-note">
+            You need at least {requiredCount} action cards in hand to complete {goal.name}.
+          </p>
         )}
 
         <div className="action-ready-count-row">
-          <span>{selectedIds.length} / 4 selected</span>
+          <span>{selectedIds.length} / {requiredCount} selected</span>
           <span>{actionCards.length} action cards available</span>
         </div>
 
@@ -46,8 +51,8 @@ export const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) =>
               key={card.id}
               type="button"
               className={`selectable-card action-ready-selectable ${selectedIds.includes(card.id) ? "selected" : ""}`}
-              onClick={() => toggleCard(card.id)}
-              disabled={!selectedIds.includes(card.id) && selectedIds.length >= 4}
+              onClick={() => toggle(card.id)}
+              disabled={!selectedIds.includes(card.id) && selectedIds.length >= requiredCount}
             >
               <CardFace card={card} compact hoverMode="none" />
               <span>{card.name}</span>
@@ -56,11 +61,11 @@ export const MeditatorModal = ({ goal, goalIndex, hand, onClose, onConfirm }) =>
         </div>
 
         <button
-          className="danger-button modal-confirm-button"
+          className={`${confirmVariant} modal-confirm-button`}
           disabled={!canConfirm}
           onClick={() => onConfirm({ goalIndex, actionCardIds: selectedIds })}
         >
-          Discard 4 Actions
+          {confirmLabel}
         </button>
         <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
           Close

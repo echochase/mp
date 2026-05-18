@@ -1,33 +1,16 @@
 import { useState } from "react";
+import { usePairedCardSelection } from "../../../hooks/useCardSelection.js";
 import { SelectableOfferGrid } from "./SelectableOfferGrid.jsx";
 
 export const TradeBuilderModal = ({ hand, storage, opponents, defaultTargetName, onClose, onConfirm }) => {
-  const [selectedHandIds, setSelectedHandIds] = useState([]);
-  const [selectedStorageIds, setSelectedStorageIds] = useState([]);
+  const { selectedHandIds, selectedStorageIds, toggleHand, toggleStorage } = usePairedCardSelection(4);
   const [targetMode, setTargetMode] = useState("everyone");
   const [target, setTarget] = useState(
     opponents.some((p) => p.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
   );
   const [useBinding, setUseBinding] = useState(false);
 
-  const selectedCount = selectedHandIds.length + selectedStorageIds.length;
   const hasBinding = hand.some((card) => card.key === "bindingContract" && !selectedHandIds.includes(card.id));
-
-  const toggleHandCard = (id) => {
-    setSelectedHandIds((ids) => {
-      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (selectedCount >= 4) return ids;
-      return [...ids, id];
-    });
-  };
-
-  const toggleStorageCard = (id) => {
-    setSelectedStorageIds((ids) => {
-      if (ids.includes(id)) return ids.filter((selectedId) => selectedId !== id);
-      if (selectedCount >= 4) return ids;
-      return [...ids, id];
-    });
-  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -78,8 +61,8 @@ export const TradeBuilderModal = ({ hand, storage, opponents, defaultTargetName,
           storage={storage}
           selectedHandIds={selectedHandIds}
           selectedStorageIds={selectedStorageIds}
-          onToggleHand={toggleHandCard}
-          onToggleStorage={toggleStorageCard}
+          onToggleHand={toggleHand}
+          onToggleStorage={toggleStorage}
         />
 
         <button

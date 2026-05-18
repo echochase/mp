@@ -16,8 +16,7 @@ import { SeatingOrder } from "../components/game/table/SeatingOrder.jsx";
 import { ActionTargetModal } from "../components/game/modals/ActionTargetModal.jsx";
 import { TradeBuilderModal } from "../components/game/modals/TradeBuilderModal.jsx";
 import { TradeResponseModal } from "../components/game/modals/TradeResponseModal.jsx";
-import { ActionReadyModal } from "../components/game/modals/ActionReadyModal.jsx";
-import { MeditatorModal } from "../components/game/modals/MeditatorModal.jsx";
+import { ActionCardSelectionModal } from "../components/game/modals/ActionCardSelectionModal.jsx";
 import { InvestorModal } from "../components/game/modals/InvestorModal.jsx";
 import { CombinedDiscardModal } from "../components/game/modals/CombinedDiscardModal.jsx";
 import { DiscardPileModal } from "../components/game/modals/DiscardPileModal.jsx";
@@ -666,20 +665,28 @@ useEffect(
       )}
 
       {actionReadyGoal && (
-        <ActionReadyModal
+        <ActionCardSelectionModal
           goal={actionReadyGoal.goal}
           goalIndex={actionReadyGoal.goalIndex}
           hand={me.hand || []}
+          requiredCount={7}
+          description="Select exactly 7 action cards to reveal to everyone. These cards stay in your hand."
+          confirmLabel="Reveal 7 Actions"
+          confirmVariant="gold-button"
           onClose={() => setActionReadyGoal(null)}
           onConfirm={completeActionReady}
         />
       )}
 
       {meditatorGoal && (
-        <MeditatorModal
+        <ActionCardSelectionModal
           goal={meditatorGoal.goal}
           goalIndex={meditatorGoal.goalIndex}
           hand={me.hand || []}
+          requiredCount={4}
+          description="Select exactly 4 action cards to discard. These cards go to the discard pile, and Meditator scores 3 points only if all 4 are valid action cards."
+          confirmLabel="Discard 4 Actions"
+          confirmVariant="danger-button"
           onClose={() => setMeditatorGoal(null)}
           onConfirm={completeMeditator}
         />
