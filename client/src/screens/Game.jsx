@@ -6,12 +6,11 @@ import { useCardPermissions } from "../hooks/useCardPermissions.js";
 import "../styles/game.css";
 import { CANCEL_REACTION_KEYS, TARGETED_ACTION_KEYS, sortCards } from "../utils/cards.js";
 import { PlayerAvatar } from "../components/game/PlayerAvatar.jsx";
-import { CardFace } from "../components/game/cards/CardFace.jsx";
-import { PlayingCard } from "../components/game/cards/PlayingCard.jsx";
 import { GoalCard } from "../components/game/cards/GoalCard.jsx";
 import { PendingActionPanel } from "../components/game/panels/PendingActionPanel.jsx";
 import { ActiveTradePanel } from "../components/game/panels/ActiveTradePanel.jsx";
 import { CompletedGoalsPanel } from "../components/game/panels/CompletedGoalsPanel.jsx";
+import { HandPanel } from "../components/game/panels/HandPanel.jsx";
 import { MyProgressPanel } from "../components/game/panels/MyProgressPanel.jsx";
 import { MobileTableDashboard } from "../components/game/panels/MobileTableDashboard.jsx";
 import { TableTopView } from "../components/game/table/TableTopView.jsx";
@@ -377,56 +376,19 @@ export const Game = ({ socket, name, room, setRoom }) => {
             }
           />
 
-          <section className="game-panel hand-panel compact-panel compact-hand-strip">
-            <div className="panel-heading split-heading small-heading">
-              <div>
-                <p className="eyebrow">Your hand</p>
-                <h2>{me.hand.length} cards</h2>
-              </div>
-              <div className="hand-header-right">
-                {me.mustDiscard && <span className="danger-pill">Discard {me.hand.length - 8}</span>}
-                <div className="hand-action-buttons">
-                  <button
-                    className={`trade-turn-button ${me.canCreateTrade ? "active" : ""}`}
-                    disabled={!me.canCreateTrade}
-                    onClick={() => setTradeBuilderOpen(true)}
-                  >
-                    Trade
-                  </button>
-                  {!gameState.pendingAction && !gameState.pendingChoice && !me.pendingChoice && (
-                    <button
-                      className="gold-button"
-                      disabled={!me.isYourTurn || me.mustDiscard || Boolean(gameState.winner) || tableLocked}
-                      onClick={endTurn}
-                    >
-                      End Turn
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="card-strip compact-card-strip">
-              {sortedHand.map((card, displayIndex) => (
-                <PlayingCard
-                  key={card.id || `${card.key}-${displayIndex}`}
-                  card={card}
-                  displayIndex={displayIndex}
-                  isNew={newCardIds.has(card.id)}
-                  disabled={Boolean(gameState.winner || gameState.pendingChoice || me.pendingChoice)}
-                  isYourTurn={me.isYourTurn}
-                  actionPlayed={me.actionPlayed}
-                  mustDiscard={me.mustDiscard}
-                  pendingAction={gameState.pendingAction}
-                  activeTrade={gameState.activeTrade || gameState.pendingChoice || me.pendingChoice}
-                  canReactToAction={me.canReactToAction}
-                  canDragToStorage={canStoreResourceCard(card)}
-                  canDragToPlay={canPlayActionCard(card)}
-                  onPlay={() => beginPlayCard(card)}
-                  onDiscard={() => discardCard(card)}
-                />
-              ))}
-            </div>
-          </section>
+          <HandPanel
+            hand={sortedHand}
+            me={me}
+            gameState={gameState}
+            tableLocked={tableLocked}
+            newCardIds={newCardIds}
+            canStoreResourceCard={canStoreResourceCard}
+            canPlayActionCard={canPlayActionCard}
+            onOpenTrade={() => setTradeBuilderOpen(true)}
+            onEndTurn={endTurn}
+            onPlay={beginPlayCard}
+            onDiscard={discardCard}
+          />
         </section>
 
         {/* ── RIGHT SIDEBAR: seating order + history ── */}
