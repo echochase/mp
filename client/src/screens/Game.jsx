@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useGameSocket } from "../hooks/useGameSocket.js";
+import { useGameEffects } from "../hooks/useGameEffects.js";
 import "../styles/game.css";
 import { CANCEL_REACTION_KEYS, TARGETED_ACTION_KEYS, TRADE_TOOL_KEYS, sortCards } from "../utils/cards.js";
 import { PlayerAvatar } from "../components/game/PlayerAvatar.jsx";
@@ -30,15 +32,8 @@ import { SeatingOrderModal } from "../components/game/modals/SeatingOrderModal.j
 export const Game = ({ socket, name, room, setRoom }) => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const previousStateRef = useRef(null);
-  const newCardTimerRef = useRef(null);
-  const noticeTimerRef = useRef(null);
-  const resolvedActionTimerRef = useRef(null);
-  const [gameState, setGameState] = useState(null);
-  const [error, setError] = useState("");
-  const [noticeToast, setNoticeToast] = useState(null);
-  const [newCardIds, setNewCardIds] = useState(new Set());
-  const [turnPulse, setTurnPulse] = useState(0);
+  const { gameState, error } = useGameSocket(socket, name, roomCode, room, setRoom);
+  const { newCardIds, turnPulse, noticeToast, resolvedMobileAction, now } = useGameEffects(gameState);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
   const [combinedDiscardOpen, setCombinedDiscardOpen] = useState(false);
@@ -54,110 +49,10 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [tableLogOpen, setTableLogOpen] = useState(false);
   const [seatingOrderOpen, setSeatingOrderOpen] = useState(false);
   const [expandedStoragePlayer, setExpandedStoragePlayer] = useState(null);
-  const [resolvedMobileAction, setResolvedMobileAction] = useState(null);
-  const [now, setNow] = useState(Date.now());
-
 
   useEffect(() => {
-    if (!socket) return;
-    if (!name) {
-      navigate("/");
-      return;
-    }
-
-    if (!room) setRoom(roomCode);
-
-    const handleGameState = (state) => {
-      setGameState(state);
-      if (!state.activeTrade) {
-        setTradeResponseOpen(false);
-      }
-    };
-
-    const handleResumeSuccess = ({ started }) => {
-      if (!started) navigate(`/lobby/${roomCode}`);
-    };
-
-    const handleRoomNotFound = () => navigate("/");
-    const handleNotInRoom = () => navigate("/");
-    const handleGameError = (message) => {
-      setError(message);
-      window.setTimeout(() => setError(""), 3500);
-    };
-
-    socket.emit("resume-game", roomCode, name);
-    socket.on("game-state", handleGameState);
-    socket.on("resume-success", handleResumeSuccess);
-    socket.on("room-not-found", handleRoomNotFound);
-    socket.on("not-in-room-error", handleNotInRoom);
-    socket.on("game-error", handleGameError);
-
-    return () => {
-      socket.off("game-state", handleGameState);
-      socket.off("resume-success", handleResumeSuccess);
-      socket.off("room-not-found", handleRoomNotFound);
-      socket.off("not-in-room-error", handleNotInRoom);
-      socket.off("game-error", handleGameError);
-    };
-  }, [socket, name, room, roomCode, navigate, setRoom]);
-
-  useEffect(() => {
-    if (!gameState?.me) return;
-
-    const previous = previousStateRef.current;
-    if (previous?.me) {
-      const previousHandIds = new Set(previous.me.hand.map((card) => card.id));
-      const addedIds = gameState.me.hand
-        .filter((card) => !previousHandIds.has(card.id))
-        .map((card) => card.id);
-
-      if (addedIds.length > 0) {
-        window.clearTimeout(newCardTimerRef.current);
-        setNewCardIds(new Set(addedIds));
-        newCardTimerRef.current = window.setTimeout(() => setNewCardIds(new Set()), 1800);
-      }
-
-      if (previous.currentPlayerName !== gameState.currentPlayerName) {
-        setTurnPulse((value) => value + 1);
-      }
-
-      if (previous.pendingAction && !gameState.pendingAction) {
-        window.clearTimeout(resolvedActionTimerRef.current);
-        setResolvedMobileAction({
-          id: `${previous.pendingAction.card?.id || previous.pendingAction.card?.key || "action"}-${Date.now()}`,
-          card: previous.pendingAction.card,
-        });
-        resolvedActionTimerRef.current = window.setTimeout(() => setResolvedMobileAction(null), 900);
-      }
-    }
-
-    previousStateRef.current = gameState;
-  }, [gameState]);
-
-  useEffect(() => {
-    if (!gameState?.notice?.id) {
-      setNoticeToast(null);
-      return;
-    }
-    setNoticeToast(gameState.notice);
-    window.clearTimeout(noticeTimerRef.current);
-    noticeTimerRef.current = window.setTimeout(() => setNoticeToast(null), 3200);
-  }, [gameState?.notice?.id, gameState?.notice]);
-
-  useEffect(() => {
-    if (!gameState?.pendingAction && gameState?.activeTrade?.state !== "scamWindow") return undefined;
-    const interval = window.setInterval(() => setNow(Date.now()), 100);
-    return () => window.clearInterval(interval);
-  }, [gameState?.pendingAction, gameState?.activeTrade?.state]);
-
-useEffect(
-    () => () => {
-      window.clearTimeout(newCardTimerRef.current);
-      window.clearTimeout(noticeTimerRef.current);
-      window.clearTimeout(resolvedActionTimerRef.current);
-    },
-    []
-  );
+    if (!gameState?.activeTrade) setTradeResponseOpen(false);
+  }, [gameState?.activeTrade]);
 
   const me = gameState?.me;
   const opponents = useMemo(
