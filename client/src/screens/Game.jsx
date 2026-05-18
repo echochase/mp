@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useGameSocket } from "../hooks/useGameSocket.js";
 import { useGameEffects } from "../hooks/useGameEffects.js";
+import { useCardPermissions } from "../hooks/useCardPermissions.js";
 import "../styles/game.css";
-import { CANCEL_REACTION_KEYS, TARGETED_ACTION_KEYS, TRADE_TOOL_KEYS, sortCards } from "../utils/cards.js";
+import { CANCEL_REACTION_KEYS, TARGETED_ACTION_KEYS, sortCards } from "../utils/cards.js";
 import { PlayerAvatar } from "../components/game/PlayerAvatar.jsx";
 import { CardFace } from "../components/game/cards/CardFace.jsx";
 import { PlayingCard } from "../components/game/cards/PlayingCard.jsx";
@@ -73,7 +74,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
     [me?.hand]
   );
 
-  const tableLocked = Boolean(gameState?.pendingAction || gameState?.activeTrade || gameState?.pendingChoice || me?.pendingChoice);
+  const { canStoreResourceCard, canPlayActionCard, tableLocked } = useCardPermissions(gameState, me);
 
   useEffect(() => {
     const handleEscape = (event) => {
@@ -185,38 +186,9 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const chooseDiscardCard = (cardId) => socket.emit("choose-discard-card", roomCode, { cardId });
   const endTurn = () => socket.emit("end-turn", roomCode);
 
-  const canStoreResourceCard = (card) =>
-    Boolean(
-      card?.type === "resource" &&
-        me?.isYourTurn &&
-        !me?.mustDiscard &&
-        !tableLocked &&
-        !gameState?.winner &&
-        !gameState?.pendingChoice &&
-        !me?.pendingChoice
-    );
-
   const storeResourceCard = (card) => {
     if (!canStoreResourceCard(card)) return;
     playCard(card);
-  };
-
-  const canPlayActionCard = (card) => {
-    if (!card || card.type !== "action" || gameState?.winner || gameState?.pendingChoice || me?.pendingChoice) return false;
-
-    const isCancelReaction = CANCEL_REACTION_KEYS.includes(card.key);
-    const isTradeTool = TRADE_TOOL_KEYS.includes(card.key);
-    const actionBlockedByTable = Boolean(gameState?.activeTrade || (gameState?.pendingAction && !isCancelReaction));
-    const canReact = isCancelReaction && me?.canReactToAction && gameState?.pendingAction;
-    const canPlayNormalAction =
-      !isCancelReaction &&
-      !isTradeTool &&
-      !me?.mustDiscard &&
-      !actionBlockedByTable &&
-      me?.isYourTurn &&
-      !me?.actionPlayed;
-
-    return Boolean(canReact || canPlayNormalAction);
   };
 
   const handleResourceDrop = (cardId) => {
