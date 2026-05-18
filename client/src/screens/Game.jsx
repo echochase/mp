@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "../styles/game.css";
 
@@ -35,6 +35,8 @@ const CANCEL_REACTION_KEYS = ["iThinkNot", "absolutelyNot"];
 const TRADE_TOOL_KEYS = ["itsAScam", "bindingContract"];
 const TARGETED_ACTION_KEYS = ["theft", "sabotage", "robbery", "goalRemoval", "goalSwap", "oraclesPower", "absoluteCalamity"];
 const SABOTAGE_PROTECTED_KEYS = ["gold", "diamond"];
+
+const CardZoomContext = createContext(null);
 
 const AVATAR_COLORS = [
   "#7c3aed",
@@ -194,6 +196,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [noticeToast, setNoticeToast] = useState(null);
   const [newCardIds, setNewCardIds] = useState(new Set());
   const [turnPulse, setTurnPulse] = useState(0);
+  const [zoomedCard, setZoomedCard] = useState(null);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
   const [combinedDiscardOpen, setCombinedDiscardOpen] = useState(false);
@@ -520,6 +523,7 @@ useEffect(
     .join(" ");
 
   return (
+    <CardZoomContext.Provider value={setZoomedCard}>
     <main className={gamePageClassName}>
       <header className="game-header compact-header">
         <div>
@@ -855,7 +859,7 @@ useEffect(
           onExpandGoal={setExpandedGoalCard}
         />
       )}
-      
+
       {discardPileOpen && (
         <DiscardPileModal
           title="Card Discard"
@@ -909,7 +913,12 @@ useEffect(
       )}
 
       <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
+
+      {zoomedCard && (
+        <CardZoomModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
+      )}
     </main>
+    </CardZoomContext.Provider>
   );
 };
 
@@ -951,21 +960,6 @@ const CardFace = ({
         </span>
       );
     }
-
-    if (effectiveHoverMode === "title") {
-      return (
-        <span className="hover-card-details hover-card-title-only">
-          <strong>{cardDisplayTitle}</strong>
-        </span>
-      );
-    }
-
-    return (
-      <span className="hover-card-details">
-        <strong>{cardDisplayTitle}</strong>
-        <small>{card?.description || "No description available."}</small>
-      </span>
-    );
   };
 
   return (
@@ -1813,7 +1807,7 @@ const TableTopView = ({
         >
           <p className="tabletop-zone-label">Your Storage</p>
           {canStoreDraggedResource && <p className="storage-drop-hint">Drag resources here to store them.</p>}
-          <StorageCards cards={me?.storage || []} />
+          <StorageCards cards={me?.storage || []} paginate={false} />
         </div>
       </div>
 
@@ -1821,23 +1815,68 @@ const TableTopView = ({
   );
 };
 
-const StorageCards = ({ cards = [], compact = false }) => {
+const StorageCards = ({ cards = [], compact = false, paginate = true }) => {
+  const [page, setPage] = useState(0);
+  const [slotsPerRow, setSlotsPerRow] = useState(10);
+  const containerRef = useRef(null);
+
   const groups = groupCardsByKey(cards);
 
-  if (groups.length === 0) {
-    return <p className="empty-storage">No resources stored yet.</p>;
-  }
+  useLayoutEffect(() => {
+    if (!paginate) return;
+    const cardWidth = compact ? 44 : 54;
+    const gap = compact ? 7 : 9;
+
+    const compute = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const w = el.getBoundingClientRect().width;
+      if (w === 0) return;
+      setSlotsPerRow(Math.max(2, Math.floor((w + gap) / (cardWidth + gap))));
+    };
+
+    compute();
+    const ro = new ResizeObserver(compute);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setPage(0);
+  }, [slotsPerRow]);
+
+  const needsPagination = paginate && groups.length > slotsPerRow;
+  const cardsPerPage = needsPagination ? slotsPerRow - 1 : groups.length;
+  const totalPages = needsPagination ? Math.ceil(groups.length / cardsPerPage) : 1;
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const hasPrev = needsPagination && safePage > 0;
+  const hasNext = needsPagination && safePage < totalPages - 1;
+  const visible = needsPagination
+    ? groups.slice(safePage * cardsPerPage, (safePage + 1) * cardsPerPage)
+    : groups;
 
   return (
-    <div className={`storage-card-grid ${compact ? "compact-storage-cards" : ""}`}>
-      {groups.map(({ card, count }) => (
-        <article className="storage-stack-card" key={card.key} title={`${card.name} × ${count}`}>
-          <div className="stack-shadow stack-shadow-one" />
-          {count > 1 && <div className="stack-shadow stack-shadow-two" />}
-          <CardFace card={card} compact />
-          <span className="storage-count-badge">×{count}</span>
-        </article>
-      ))}
+    <div ref={containerRef} className={`storage-card-grid ${compact ? "compact-storage-cards" : ""}`}>
+      {groups.length === 0 ? (
+        <p className="empty-storage">No resources stored yet.</p>
+      ) : (
+        <>
+          {hasPrev && (
+            <button className="storage-nav-btn" onClick={() => setPage(safePage - 1)}>&#8249;</button>
+          )}
+          {visible.map(({ card, count }) => (
+            <article className="storage-stack-card" key={card.key} title={`${card.name} × ${count}`}>
+              <div className="stack-shadow stack-shadow-one" />
+              {count > 1 && <div className="stack-shadow stack-shadow-two" />}
+              <CardFace card={card} compact />
+              <span className="storage-count-badge">×{count}</span>
+            </article>
+          ))}
+          {hasNext && (
+            <button className="storage-nav-btn" onClick={() => setPage(safePage + 1)}>&#8250;</button>
+          )}
+        </>
+      )}
     </div>
   );
 };

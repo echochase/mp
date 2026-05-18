@@ -127,6 +127,7 @@
   gap: 14px;
   min-width: 0;
   min-height: 0;
+  align-self: stretch;
 }
 
 .compact-hand-strip .card-strip {
@@ -679,14 +680,41 @@ button:disabled {
 
 .storage-card-grid {
   display: grid;
+  width: 100%;
   grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
   gap: 9px;
   text-align: left;
+  overflow: visible;
+}
+
+.storage-card-grid > .empty-storage {
+  grid-column: 1 / -1;
+  text-align: center;
 }
 
 .compact-storage-cards {
   grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
   gap: 7px;
+}
+
+.storage-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  border-radius: 8px;
+  color: var(--gold-light);
+  font-size: 1.8rem;
+  cursor: pointer;
+  padding: 0;
+  align-self: stretch;
+  min-width: 22px;
+  transition: background 0.15s ease;
+}
+
+.storage-nav-btn:hover {
+  background: rgba(201, 168, 76, 0.22);
 }
 
 .storage-stack-card {
@@ -1195,48 +1223,45 @@ button:disabled {
 
 .card-face-button {
   position: relative;
+  transition: transform 0.15s ease;
 }
 
-.hover-card-details {
-  position: absolute;
-  inset: 0;
-  z-index: 9;
+.card-face-button:hover {
+  transform: scale(1.08);
+  z-index: 10;
+}
+
+/* ── Card zoom modal ─────────────────────────────────────────────────────── */
+
+.card-zoom-backdrop {
+  z-index: 9999;
+}
+
+.card-zoom-modal {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 4px;
-  padding: 8px;
-  border-radius: inherit;
-  background: rgba(4, 5, 8, 0.5);
-  color: white;
-  opacity: 0;
-  pointer-events: none;
-  text-align: left;
-  transition: opacity 0.16s ease;
+  align-items: center;
+  justify-content: center;
 }
 
-.card-face-button:hover .hover-card-details,
-.card-face-button:focus-visible .hover-card-details,
-.mini-money-card:hover .hover-card-details,
-.mini-money-card:focus-visible .hover-card-details {
-  opacity: 1;
+.card-zoom-image {
+  width: min(320px, 80vw);
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
 }
 
-.hover-card-details strong {
-  font-size: 0.72rem;
-  line-height: 1;
+.card-zoom-fallback {
+  width: min(320px, 80vw);
+  aspect-ratio: 3 / 4;
+  background: rgba(19, 23, 31, 0.98);
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
   color: var(--gold-light);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
-}
-
-.hover-card-details small {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 0.64rem;
-  line-height: 1.15;
-  color: rgba(255, 255, 255, 0.88);
 }
 
 .card-state-chip {
@@ -1882,6 +1907,7 @@ button:disabled {
   gap: 10px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -1906,7 +1932,7 @@ button:disabled {
 }
 
 .tabletop-player-zone {
-  padding: 8px 10px;
+  padding: 8px 10px 14px;
   border-radius: 13px;
   min-height: 72px;
   border: 1px solid transparent;
@@ -2025,8 +2051,9 @@ button:disabled {
   gap: 9px;
   padding: 8px 10px;
   border-radius: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
   width: 100%;
   margin-bottom: 14px;
 }
