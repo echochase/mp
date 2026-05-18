@@ -1,185 +1,21 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "../styles/game.css";
-
-const playingCardImages = import.meta.glob("/src/assets/cards/*.{png,jpg,jpeg,webp}", {
-  eager: true,
-  import: "default",
-});
-
-const goalCardImages = import.meta.glob("/src/assets/goal-cards/*.{png,jpg,jpeg,webp}", {
-  eager: true,
-  import: "default",
-});
-
-const buildImageMap = (modules) =>
-  Object.entries(modules).reduce(
-    (acc, [path, src]) => {
-      const key = path
-        .split("/")
-        .pop()
-        .replace(/\.[^/.]+$/, "");
-      acc[key] = src;
-      return acc;
-    },
-    {}
-  );
-
-const playingImageMap = buildImageMap(playingCardImages);
-const goalImageMap = buildImageMap(goalCardImages);
-const imageMap = { ...goalImageMap, ...playingImageMap };
-
-const STANDARD_RESOURCE_ORDER = ["workforce", "candy", "money", "wood", "land", "steel"];
-const SPECIAL_RESOURCE_ORDER = ["gold", "diamond"];
-const CANCEL_REACTION_KEYS = ["iThinkNot", "absolutelyNot"];
-const TRADE_TOOL_KEYS = ["itsAScam", "bindingContract"];
-const TARGETED_ACTION_KEYS = ["theft", "sabotage", "robbery", "goalRemoval", "goalSwap", "oraclesPower", "absoluteCalamity"];
-const SABOTAGE_PROTECTED_KEYS = ["gold", "diamond"];
-
-const CardZoomContext = createContext(null);
-
-const AVATAR_COLORS = [
-  "#7c3aed",
-  "#2563eb",
-  "#0891b2",
-  "#059669",
-  "#65a30d",
-  "#ca8a04",
-  "#ea580c",
-  "#dc2626",
-  "#db2777",
-  "#9333ea",
-  "#0f766e",
-  "#b45309",
-];
-
-const getInitial = (player = {}) =>
-  (player.avatarInitial || player.name || "?").trim().slice(0, 1).toUpperCase() || "?";
-
-const fallbackAvatarColor = (name = "Player") => {
-  let hash = 0;
-  for (let index = 0; index < name.length; index += 1) {
-    hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
-  }
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-};
-
-const getAvatarStyle = (player = {}) => ({
-  background: player.avatarColor || fallbackAvatarColor(player.name || "Player"),
-});
-
-const titleCase = (value = "") =>
-  value
-    .replace(/([A-Z])/g, " $1")
-    .replace(/[-_]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-
-const SOFT_HYPHEN = "\u00AD";
-
-const hyphenateLongWords = (value = "", chunkSize = 7) =>
-  String(value)
-    .split(/(\s+)/)
-    .map((part) => {
-      if (/^\s+$/.test(part) || part.length <= chunkSize) return part;
-      return part.match(new RegExp(`.{1,${chunkSize}}`, "g"))?.join(SOFT_HYPHEN) || part;
-    })
-    .join("");
-
-const normalizeImageLookupKey = (value = "") =>
-  String(value)
-    .replace(/\.[^/.]+$/, "")
-    .replace(/[^a-z0-9]/gi, "")
-    .toLowerCase();
-
-const buildNormalizedImageMap = (map) =>
-  Object.entries(map).reduce((acc, [key, src]) => {
-    acc[normalizeImageLookupKey(key)] = src;
-    return acc;
-  }, {});
-
-const normalizedPlayingImageMap = buildNormalizedImageMap(playingImageMap);
-const normalizedGoalImageMap = buildNormalizedImageMap(goalImageMap);
-const normalizedImageMap = buildNormalizedImageMap(imageMap);
-
-const getCardImage = (card) => {
-  const directKey = card?.key || card?.imageKey;
-  const directName = card?.name || card?.title;
-  const isGoalCard = card?.type === "goal" || card?.points !== undefined || card?.requirement || card?.anyRequirement || card?.specialCompletion;
-  const primaryMap = isGoalCard ? goalImageMap : playingImageMap;
-  const primaryNormalizedMap = isGoalCard ? normalizedGoalImageMap : normalizedPlayingImageMap;
-
-  return (
-    primaryMap[directKey] ||
-    primaryMap[directName] ||
-    primaryNormalizedMap[normalizeImageLookupKey(directKey)] ||
-    primaryNormalizedMap[normalizeImageLookupKey(directName)] ||
-    imageMap[directKey] ||
-    imageMap[directName] ||
-    normalizedImageMap[normalizeImageLookupKey(directKey)] ||
-    normalizedImageMap[normalizeImageLookupKey(directName)] ||
-    null
-  );
-};
-
-const getSortRank = (card) => {
-  if (card?.type === "resource") {
-    if (SPECIAL_RESOURCE_ORDER.includes(card.key)) return 1;
-    return 0;
-  }
-  return 2;
-};
-
-const getResourceOrder = (card) => {
-  const standardIndex = STANDARD_RESOURCE_ORDER.indexOf(card?.key);
-  if (standardIndex >= 0) return standardIndex;
-  const specialIndex = SPECIAL_RESOURCE_ORDER.indexOf(card?.key);
-  if (specialIndex >= 0) return 100 + specialIndex;
-  return 999;
-};
-
-const sortCards = (a, b) => {
-  const rankDiff = getSortRank(a) - getSortRank(b);
-  if (rankDiff !== 0) return rankDiff;
-
-  if (a?.type === "resource" && b?.type === "resource") {
-    const resourceDiff = getResourceOrder(a) - getResourceOrder(b);
-    if (resourceDiff !== 0) return resourceDiff;
-  }
-
-  return (a?.name || "").localeCompare(b?.name || "");
-};
-
-const canSabotageDiscard = (card) =>
-  Boolean(card?.type === "resource" && !SABOTAGE_PROTECTED_KEYS.includes(card.key));
-
-const groupCardsByKey = (cards = []) => {
-  const groups = new Map();
-  cards.forEach((card) => {
-    if (!groups.has(card.key)) groups.set(card.key, []);
-    groups.get(card.key).push(card);
-  });
-
-  return Array.from(groups.values())
-    .map((group) => ({ card: group[0], cards: group, count: group.length }))
-    .sort((a, b) => sortCards(a.card, b.card));
-};
-
-const formatCountdown = (targetTime, now) => {
-  if (!targetTime) return "0.0s";
-  return `${Math.max(0, (targetTime - now) / 1000).toFixed(1)}s`;
-};
-
-const getPendingActionContext = (pendingAction) => {
-  if (pendingAction?.counterTargetName) {
-    return ` while countering ${pendingAction.counterTargetName}${
-      pendingAction.counterTargetActorName ? ` from ${pendingAction.counterTargetActorName}` : ""
-    }`;
-  }
-  if (pendingAction?.targetName) return ` against ${pendingAction.targetName}`;
-  return "";
-};
+import { getAvatarStyle, getInitial } from "../utils/avatar.js";
+import { imageMap, getCardImage } from "../utils/images.js";
+import {
+  CANCEL_REACTION_KEYS,
+  SABOTAGE_PROTECTED_KEYS,
+  TARGETED_ACTION_KEYS,
+  TRADE_TOOL_KEYS,
+  canSabotageDiscard,
+  formatCountdown,
+  getPendingActionContext,
+  groupCardsByKey,
+  hyphenateLongWords,
+  sortCards,
+  titleCase,
+} from "../utils/cards.js";
 
 const isMobileTableViewport = () =>
   typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
@@ -196,7 +32,6 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [noticeToast, setNoticeToast] = useState(null);
   const [newCardIds, setNewCardIds] = useState(new Set());
   const [turnPulse, setTurnPulse] = useState(0);
-  const [zoomedCard, setZoomedCard] = useState(null);
   const [discardPileOpen, setDiscardPileOpen] = useState(false);
   const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
   const [combinedDiscardOpen, setCombinedDiscardOpen] = useState(false);
@@ -214,6 +49,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
   const [expandedStoragePlayer, setExpandedStoragePlayer] = useState(null);
   const [resolvedMobileAction, setResolvedMobileAction] = useState(null);
   const [now, setNow] = useState(Date.now());
+
 
   useEffect(() => {
     if (!socket) return;
@@ -523,7 +359,6 @@ useEffect(
     .join(" ");
 
   return (
-    <CardZoomContext.Provider value={setZoomedCard}>
     <main className={gamePageClassName}>
       <header className="game-header compact-header">
         <div>
@@ -913,12 +748,7 @@ useEffect(
       )}
 
       <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
-
-      {zoomedCard && (
-        <CardZoomModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
-      )}
     </main>
-    </CardZoomContext.Provider>
   );
 };
 

@@ -17,21 +17,7 @@ import {
   DialogActions,
 } from "@mui/material";
 import { Close as KickIcon, CheckCircle } from "@mui/icons-material";
-
-
-const AVATAR_COLORS = [
-  "#7c3aed", "#2563eb", "#0891b2", "#059669", "#65a30d", "#ca8a04",
-  "#ea580c", "#dc2626", "#db2777", "#9333ea", "#0f766e", "#b45309",
-];
-
-const getInitial = (player = {}) =>
-  (player.avatarInitial || player.name || "?").trim().slice(0, 1).toUpperCase() || "?";
-
-const fallbackAvatarColor = (name = "Player") => {
-  let hash = 0;
-  for (let index = 0; index < name.length; index += 1) hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-};
+import { fallbackAvatarColor, getInitial } from "../utils/avatar.js";
 
 export const Lobby = ({ socket, name, room, setRoom }) => {
   const { roomCode } = useParams();

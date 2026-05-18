@@ -16,10 +16,6 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
   const connectSocket = (e) => {
     e.preventDefault();
     if (!socket || !name.trim()) return;
-    if (name.length > 16) {
-      alert("Keep your name to 16 characters or fewer 🌱");
-      return;
-    }
 
     if (creating) {
       socket.emit("create-room", name);
