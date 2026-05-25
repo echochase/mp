@@ -1,6 +1,6 @@
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const MobileResolvedActionInPlaySpace = ({ card }) => (
+export const MobileResolvedActionPanel = ({ card }) => (
   <div className="mobile-resolved-action-play-space" aria-hidden="true">
     <div className="mobile-resolved-action-card">
       <CardFace card={card} compact hoverMode="none" noHoverScale />

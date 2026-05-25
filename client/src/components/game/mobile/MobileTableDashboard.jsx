@@ -1,5 +1,5 @@
 import { GoalCard } from "../cards/GoalCard.jsx";
-import { MyProgressPanel } from "./MyProgressPanel.jsx";
+import { MyProgressPanel } from "../panels/MyProgressPanel.jsx";
 import { MobileDeckSummary } from "./MobileDeckSummary.jsx";
 
 export const MobileTableDashboard = ({

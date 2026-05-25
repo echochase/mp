@@ -7,12 +7,12 @@ import "../styles/game.css";
 import { CANCEL_REACTION_KEYS, TARGETED_ACTION_KEYS, sortCards } from "../utils/cards.js";
 import { PlayerAvatar } from "../components/game/PlayerAvatar.jsx";
 import { GoalCard } from "../components/game/cards/GoalCard.jsx";
-import { PendingActionPanel } from "../components/game/panels/PendingActionPanel.jsx";
+import { DesktopPendingActionPanel } from "../components/game/panels/DesktopPendingActionPanel.jsx";
 import { ActiveTradePanel } from "../components/game/panels/ActiveTradePanel.jsx";
 import { CompletedGoalsPanel } from "../components/game/panels/CompletedGoalsPanel.jsx";
 import { HandPanel } from "../components/game/panels/HandPanel.jsx";
 import { MyProgressPanel } from "../components/game/panels/MyProgressPanel.jsx";
-import { MobileTableDashboard } from "../components/game/panels/MobileTableDashboard.jsx";
+import { MobileTableDashboard } from "../components/game/mobile/MobileTableDashboard.jsx";
 import { TableTopView } from "../components/game/table/TableTopView.jsx";
 import { SeatingOrder } from "../components/game/table/SeatingOrder.jsx";
 import { ActionTargetModal } from "../components/game/modals/ActionTargetModal.jsx";
@@ -20,8 +20,8 @@ import { TradeBuilderModal } from "../components/game/modals/TradeBuilderModal.j
 import { TradeResponseModal } from "../components/game/modals/TradeResponseModal.jsx";
 import { ActionCardSelectionModal } from "../components/game/modals/ActionCardSelectionModal.jsx";
 import { InvestorModal } from "../components/game/modals/InvestorModal.jsx";
-import { CombinedDiscardModal } from "../components/game/modals/CombinedDiscardModal.jsx";
-import { DiscardPileModal } from "../components/game/modals/DiscardPileModal.jsx";
+import { DesktopDiscardModal } from "../components/game/modals/DesktopDiscardModal.jsx";
+import { MobileDiscardModal } from "../components/game/mobile/MobileDiscardModal.jsx";
 import { MagicHandChoiceModal } from "../components/game/modals/MagicHandChoiceModal.jsx";
 import { ExpandedGoalCardModal } from "../components/game/modals/ExpandedGoalCardModal.jsx";
 import { RevealModal } from "../components/game/modals/RevealModal.jsx";
@@ -269,7 +269,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
         {/* ── CENTRE: tabletop ── */}
         <section className="tabletop-column">
           {gameState.pendingAction && (
-            <PendingActionPanel
+            <DesktopPendingActionPanel
               pendingAction={gameState.pendingAction}
               me={me}
               now={now}
@@ -470,7 +470,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
       )}
 
       {activeModal?.type === "completedGoals" && (
-        <DiscardPileModal
+        <DesktopDiscardModal
           title="Completed Goals"
           goalCards={me.completedGoals || []}
           onClose={closeModal}
@@ -479,7 +479,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
       )}
 
       {activeModal?.type === "goalDiscard" && (
-        <DiscardPileModal
+        <DesktopDiscardModal
           title="Goal Discard"
           goalCards={gameState.discardPile?.goals || []}
           onClose={closeModal}
@@ -488,7 +488,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
       )}
 
       {activeModal?.type === "discardPile" && (
-        <DiscardPileModal
+        <DesktopDiscardModal
           title="Card Discard"
           playingCards={gameState.discardPile?.playing || []}
           onClose={closeModal}
@@ -496,7 +496,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
       )}
 
       {activeModal?.type === "combinedDiscard" && (
-        <CombinedDiscardModal
+        <MobileDiscardModal
           playingCards={gameState.discardPile?.playing || []}
           goalCards={gameState.discardPile?.goals || []}
           onClose={closeModal}

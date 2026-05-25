@@ -3,8 +3,8 @@ import { TablePlayerChip } from "./TablePlayerChip.jsx";
 import { StorageCards } from "./StorageCards.jsx";
 import { TableDiscardPile } from "./TableDiscardPile.jsx";
 import { DrawDeck } from "./DrawDeck.jsx";
-import { MobilePendingActionInPlaySpace } from "./MobilePendingActionInPlaySpace.jsx";
-import { MobileResolvedActionInPlaySpace } from "./MobileResolvedActionInPlaySpace.jsx";
+import { MobilePendingActionPanel } from "../mobile/MobilePendingActionPanel.jsx";
+import { MobileResolvedActionPanel } from "../mobile/MobileResolvedActionPanel.jsx";
 
 export const TableTopView = ({
   players,
@@ -107,7 +107,7 @@ export const TableTopView = ({
           }}
         >
           {pendingAction ? (
-            <MobilePendingActionInPlaySpace
+            <MobilePendingActionPanel
               pendingAction={pendingAction}
               me={me}
               now={now}
@@ -115,7 +115,7 @@ export const TableTopView = ({
               onReact={onReact}
             />
           ) : resolvedMobileAction ? (
-            <MobileResolvedActionInPlaySpace card={resolvedMobileAction.card} />
+            <MobileResolvedActionPanel card={resolvedMobileAction.card} />
           ) : (
             <>
               <strong>Play Space</strong>

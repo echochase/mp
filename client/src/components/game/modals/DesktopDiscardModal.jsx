@@ -1,6 +1,6 @@
 import { DiscardCardGrid } from "./DiscardCardGrid.jsx";
 
-export const DiscardPileModal = ({ playingCards = [], goalCards = [], title = "Discard Pile", onClose, onExpandGoal }) => {
+export const DesktopDiscardModal = ({ playingCards = [], goalCards = [], title = "Discard Pile", onClose, onExpandGoal }) => {
   const cards = [
     ...playingCards.map((card) => ({ ...card, pileLabel: "Playing discard", isGoalCard: false })),
     ...goalCards.map((card) => ({ ...card, pileLabel: "Goal discard", isGoalCard: true })),

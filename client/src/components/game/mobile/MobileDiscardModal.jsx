@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { DiscardCardGrid } from "./DiscardCardGrid.jsx";
+import { DiscardCardGrid } from "../modals/DiscardCardGrid.jsx";
 
-export const CombinedDiscardModal = ({ playingCards = [], goalCards = [], onClose, onExpandGoal }) => {
+export const MobileDiscardModal = ({ playingCards = [], goalCards = [], onClose, onExpandGoal }) => {
   const [activePile, setActivePile] = useState("playing");
   const cards = activePile === "playing"
     ? playingCards.map((card) => ({ ...card, pileLabel: "Card discard", isGoalCard: false })).reverse()

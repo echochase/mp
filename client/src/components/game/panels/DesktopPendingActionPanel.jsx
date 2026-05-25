@@ -1,7 +1,7 @@
 import { CANCEL_REACTION_KEYS, formatCountdown, getPendingActionContext } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const PendingActionPanel = ({ pendingAction, me, now, onReact, hand }) => {
+export const DesktopPendingActionPanel = ({ pendingAction, me, now, onReact, hand }) => {
   const reactionCards = hand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
   const isActor = pendingAction.actorName === me.name;
 

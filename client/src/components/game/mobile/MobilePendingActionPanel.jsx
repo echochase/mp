@@ -1,7 +1,7 @@
 import { CANCEL_REACTION_KEYS, formatCountdown, getPendingActionContext } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const MobilePendingActionInPlaySpace = ({ pendingAction, me, now, reactionHand = [], onReact }) => {
+export const MobilePendingActionPanel = ({ pendingAction, me, now, reactionHand = [], onReact }) => {
   const reactionCards = reactionHand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
   const isActor = pendingAction.actorName === me.name;
 
