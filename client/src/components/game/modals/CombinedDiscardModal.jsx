@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { hyphenateLongWords } from "../../../utils/cards.js";
-import { isMobileTableViewport } from "../../../utils/viewport.js";
-import { CardFace } from "../cards/CardFace.jsx";
+import { DiscardCardGrid } from "./DiscardCardGrid.jsx";
 
 export const CombinedDiscardModal = ({ playingCards = [], goalCards = [], onClose, onExpandGoal }) => {
   const [activePile, setActivePile] = useState("playing");
@@ -30,27 +28,7 @@ export const CombinedDiscardModal = ({ playingCards = [], goalCards = [], onClos
             Goal discard ({goalCards.length})
           </button>
         </div>
-        {cards.length === 0 ? (
-          <p className="empty-storage" style={{ textAlign: "center", margin: "24px 0" }}>Nothing here yet.</p>
-        ) : (
-          <div className="discard-modal-grid">
-            {cards.map((card) => (
-              <article className="discard-modal-card" key={`${card.pileLabel}-${card.id}`}>
-                <CardFace
-                  card={card}
-                  compact
-                  className={!card.isGoalCard && card.type === "action" ? "discard-action-card-face" : ""}
-                  hoverMode={card.isGoalCard ? "expand" : card.type === "action" ? "none" : undefined}
-                  hoverButtonLabel="Expand"
-                  onHoverButtonClick={card.isGoalCard ? () => onExpandGoal?.(card) : undefined}
-                  onClick={card.isGoalCard ? () => { if (isMobileTableViewport()) onExpandGoal?.(card); } : undefined}
-                  noHoverScale={card.isGoalCard}
-                />
-                <span>{hyphenateLongWords(card.name)}</span>
-              </article>
-            ))}
-          </div>
-        )}
+        <DiscardCardGrid cards={cards} showName onExpandGoal={onExpandGoal} />
         <button className="ghost-button discard-modal-close" onClick={onClose}>Close</button>
       </section>
     </div>

@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Box, Button, Typography, Stack, Fade } from "@mui/material";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import { containedGoldSx, outlinedGoldSx, outlinedRedSx, titleGradientSx } from "../styles/theme.js";
 
 export const HomePage = ({ socket }) => {
   const navigate = useNavigate();
@@ -15,45 +16,6 @@ export const HomePage = ({ socket }) => {
     return () => socket.off("online-players", handleOnlinePlayers);
   }, [socket]);
 
-  const btnSx = {
-    fontFamily: "'Cinzel', serif",
-    letterSpacing: "0.08em",
-    textTransform: "none",
-    borderRadius: "8px",
-    fontSize: "0.95rem",
-    py: 1.2,
-  };
-
-  const outlinedSx = {
-    ...btnSx,
-    borderColor: "rgba(201,168,76,0.5)",
-    color: "#e8c97a",
-    "&:hover": {
-      borderColor: "#e8c97a",
-      backgroundColor: "rgba(201,168,76,0.08)",
-    },
-  };
-
-  const containedSx = {
-    ...btnSx,
-    background: "linear-gradient(135deg, #c9a84c, #a07830)",
-    color: "#080a0f",
-    fontWeight: 700,
-    border: "none",
-    "&:hover": {
-      background: "linear-gradient(135deg, #e8c97a, #c9a84c)",
-    },
-  };
-
-  const backSx = {
-    ...btnSx,
-    borderColor: "rgba(199,63,63,0.5)",
-    color: "#e57373",
-    "&:hover": {
-      borderColor: "#e57373",
-      backgroundColor: "rgba(199,63,63,0.08)",
-    },
-  };
 
   return (
     <Box
@@ -70,13 +32,9 @@ export const HomePage = ({ socket }) => {
           <Typography
             variant="h2"
             sx={{
-              fontFamily: "'Cinzel', serif",
+              ...titleGradientSx,
               fontWeight: 900,
               letterSpacing: "0.06em",
-              background: "linear-gradient(135deg, #e8c97a 0%, #c9a84c 50%, #a07830 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
               mb: 1,
               "@media (max-width: 760px)": {
                 fontSize: "clamp(1.15rem, 7vw, 1.75rem)",
@@ -109,28 +67,28 @@ export const HomePage = ({ socket }) => {
         >
           {step === 1 ? (
             <>
-              <Button variant="contained" fullWidth sx={containedSx} onClick={() => setStep(2)}>
+              <Button variant="contained" fullWidth sx={containedGoldSx} onClick={() => setStep(2)}>
                 Play
               </Button>
-              <Button variant="outlined" fullWidth sx={outlinedSx} onClick={() => navigate("/settings")}>
+              <Button variant="outlined" fullWidth sx={outlinedGoldSx} onClick={() => navigate("/settings")}>
                 Settings
               </Button>
-              <Button variant="outlined" fullWidth sx={outlinedSx} onClick={() => navigate("/card-list")}>
+              <Button variant="outlined" fullWidth sx={outlinedGoldSx} onClick={() => navigate("/card-list")}>
                 Card List
               </Button>
-              <Button variant="outlined" fullWidth sx={outlinedSx} onClick={() => navigate("/about")}>
+              <Button variant="outlined" fullWidth sx={outlinedGoldSx} onClick={() => navigate("/about")}>
                 How to Play
               </Button>
             </>
           ) : (
             <>
-              <Button variant="contained" fullWidth sx={containedSx} onClick={() => navigate("/create")}>
+              <Button variant="contained" fullWidth sx={containedGoldSx} onClick={() => navigate("/create")}>
                 Create Room
               </Button>
-              <Button variant="contained" fullWidth sx={containedSx} onClick={() => navigate("/join")}>
+              <Button variant="contained" fullWidth sx={containedGoldSx} onClick={() => navigate("/join")}>
                 Join Room
               </Button>
-              <Button variant="outlined" fullWidth sx={backSx} onClick={() => setStep(1)}>
+              <Button variant="outlined" fullWidth sx={outlinedRedSx} onClick={() => setStep(1)}>
                 ← Back
               </Button>
             </>
