@@ -1,14 +1,18 @@
 import { useState } from "react";
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { DiscardCardGrid } from "../modals/DiscardCardGrid.jsx";
 
-export const MobileDiscardModal = ({ playingCards = [], goalCards = [], onClose, onExpandGoal }) => {
+export const MobileDiscardModal = () => {
+  const { gameState, openModal, closeModal } = useGame();
+  const { playing: playingCards = [], goals: goalCards = [] } = gameState.discardPile || {};
+
   const [activePile, setActivePile] = useState("playing");
   const cards = activePile === "playing"
     ? playingCards.map((card) => ({ ...card, pileLabel: "Card discard", isGoalCard: false })).reverse()
     : goalCards.map((card) => ({ ...card, pileLabel: "Goal discard", isGoalCard: true })).reverse();
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <section className="discard-modal combined-discard-modal" onClick={(event) => event.stopPropagation()}>
         <p className="eyebrow" style={{ textAlign: "center" }}>Table Memory</p>
         <h2 className="discard-modal-title">Discarded Cards</h2>
@@ -28,8 +32,8 @@ export const MobileDiscardModal = ({ playingCards = [], goalCards = [], onClose,
             Goal discard ({goalCards.length})
           </button>
         </div>
-        <DiscardCardGrid cards={cards} showName onExpandGoal={onExpandGoal} />
-        <button className="ghost-button discard-modal-close" onClick={onClose}>Close</button>
+        <DiscardCardGrid cards={cards} showName onExpandGoal={(card) => openModal("expandedGoal", { card })} />
+        <button className="ghost-button discard-modal-close" onClick={closeModal}>Close</button>
       </section>
     </div>
   );

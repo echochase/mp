@@ -1,22 +1,21 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { CANCEL_REACTION_KEYS, TRADE_TOOL_KEYS, titleCase } from "../../../utils/cards.js";
 import { CardFace } from "./CardFace.jsx";
 
-export const PlayingCard = ({
-  card,
-  displayIndex,
-  isNew,
-  disabled,
-  isYourTurn,
-  actionPlayed,
-  mustDiscard,
-  pendingAction,
-  activeTrade,
-  canReactToAction,
-  canDragToStorage,
-  canDragToPlay,
-  onPlay,
-  onDiscard,
-}) => {
+export const PlayingCard = ({ card, displayIndex }) => {
+  const {
+    me, gameState, newCardIds,
+    canStoreResourceCard, canPlayActionCard,
+    beginPlayCard, discardCard,
+  } = useGame();
+
+  const { isYourTurn, actionPlayed, mustDiscard, canReactToAction } = me;
+  const { pendingAction } = gameState;
+
+  const pendingChoice = gameState.pendingChoice || me.pendingChoice;
+  const activeTrade = gameState.activeTrade || pendingChoice;
+  const isNew = newCardIds.has(card.id);
+  const disabled = Boolean(gameState.winner || pendingChoice);
   const isResource = card.type === "resource";
   const isCancelReaction = CANCEL_REACTION_KEYS.includes(card.key);
   const isTradeTool = TRADE_TOOL_KEYS.includes(card.key);
@@ -29,6 +28,11 @@ export const PlayingCard = ({
   const isAction = !isResource;
   const showActionHoverPlay = isAction && !disabled && (canPlayNormalAction || canReact);
   const playDisabled = disabled || (!canPlayResource && !canPlayNormalAction && !canReact);
+
+  const canDragToStorage = canStoreResourceCard(card);
+  const canDragToPlay = canPlayActionCard(card);
+  const onPlay = () => beginPlayCard(card);
+  const onDiscard = () => discardCard(card);
 
   const clearPointerDropHighlights = () => {
     if (typeof document === "undefined") return;

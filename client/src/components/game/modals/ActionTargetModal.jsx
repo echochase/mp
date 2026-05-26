@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { canSabotageDiscard } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const ActionTargetModal = ({ card, gameState, me, opponents, defaultTargetName, onClose, onConfirm }) => {
+export const ActionTargetModal = () => {
+  const { activeModal, gameState, me, opponents, defaultTargetName, closeModal, playCard } = useGame();
+  
+  const card = activeModal?.card;
   const requiresSingleTarget = card.key !== "absoluteCalamity";
   const [selectedTarget, setSelectedTarget] = useState(
     opponents.some((p) => p.name === defaultTargetName) ? defaultTargetName : opponents[0]?.name || ""
   );
+
   const [selectedStorageCardId, setSelectedStorageCardId] = useState("");
   const [sabotageStorageCardIds, setSabotageStorageCardIds] = useState([]);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
@@ -76,7 +81,8 @@ export const ActionTargetModal = ({ card, gameState, me, opponents, defaultTarge
       payload.goalIndex = targetGoalIndex;
       payload.myGoalIndex = myGoalIndex;
     }
-    onConfirm(payload);
+    playCard(card, payload);
+    closeModal();
   };
 
   const canConfirm = Boolean(
@@ -89,14 +95,14 @@ export const ActionTargetModal = ({ card, gameState, me, opponents, defaultTarge
   );
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <section className="action-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Configure action</p>
             <h2>{card.name}</h2>
           </div>
-          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={closeModal}>✕</button>
         </div>
         <p className="modal-description">{card.description}</p>
 
@@ -254,7 +260,7 @@ export const ActionTargetModal = ({ card, gameState, me, opponents, defaultTarge
         <button className="gold-button modal-confirm-button" disabled={!canConfirm} onClick={confirm}>
           Play {card.name}
         </button>
-        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={closeModal}>
           Close
         </button>
       </section>
