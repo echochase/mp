@@ -1,6 +1,10 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { PlayerAvatar } from "../PlayerAvatar.jsx";
 
-export const MyProgressPanel = ({ me, isCurrent }) => {
+export const MyProgressPanel = () => {
+  const { me, gameState } = useGame();
+
+  const isCurrent = me.name === gameState.currentPlayerName;
   const score = me?.score || 0;
   const pct = Math.min(100, (score / 10) * 100);
 

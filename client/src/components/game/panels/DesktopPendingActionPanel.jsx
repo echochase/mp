@@ -1,8 +1,12 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { CANCEL_REACTION_KEYS, formatCountdown, getPendingActionContext } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const DesktopPendingActionPanel = ({ pendingAction, me, now, onReact, hand }) => {
-  const reactionCards = hand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
+export const DesktopPendingActionPanel = () => {
+  const { gameState, me, now, sortedHand, playCard } = useGame();
+
+  const { pendingAction } = gameState;
+  const reactionCards = sortedHand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
   const isActor = pendingAction.actorName === me.name;
 
   return (
@@ -20,7 +24,7 @@ export const DesktopPendingActionPanel = ({ pendingAction, me, now, onReact, han
         {isActor && <span className="card-state-chip">Your action is pending</span>}
         {!isActor && reactionCards.length === 0 && <span className="card-state-chip">No counter card</span>}
         {!isActor && reactionCards.map((card) => (
-          <button className="danger-button" key={card.id} onClick={() => onReact(card)} disabled={!me.canReactToAction}>
+          <button className="danger-button" key={card.id} onClick={() => playCard(card)} disabled={!me.canReactToAction}>
             Play {card.name}
           </button>
         ))}
