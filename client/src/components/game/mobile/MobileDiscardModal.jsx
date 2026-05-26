@@ -3,7 +3,7 @@ import { useGame } from "../../../contexts/GameContext.jsx";
 import { DiscardCardGrid } from "../modals/DiscardCardGrid.jsx";
 
 export const MobileDiscardModal = () => {
-  const { gameState, openModal, closeModal } = useGame();
+  const { gameState, closeModal } = useGame();
   const { playing: playingCards = [], goals: goalCards = [] } = gameState.discardPile || {};
 
   const [activePile, setActivePile] = useState("playing");
@@ -32,7 +32,7 @@ export const MobileDiscardModal = () => {
             Goal discard ({goalCards.length})
           </button>
         </div>
-        <DiscardCardGrid cards={cards} showName onExpandGoal={(card) => openModal("expandedGoal", { card })} />
+        <DiscardCardGrid cards={cards} />
         <button className="ghost-button discard-modal-close" onClick={closeModal}>Close</button>
       </section>
     </div>

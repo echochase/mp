@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { titleCase } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const MagicHandChoiceModal = ({ choice, onConfirm }) => {
+export const MagicHandChoiceModal = () => {
+  const { magicHandChoice: choice, chooseDiscardCard } = useGame();
+
   const [selectedCardId, setSelectedCardId] = useState("");
   const selectedCard = choice.choices?.find((card) => card.id === selectedCardId);
 
@@ -32,7 +35,7 @@ export const MagicHandChoiceModal = ({ choice, onConfirm }) => {
         </div>
         <div className="magic-hand-confirm-row">
           <span>{selectedCard ? `${selectedCard.name} selected` : "No card selected"}</span>
-          <button className="gold-button" disabled={!selectedCardId} onClick={() => onConfirm(selectedCardId)}>
+          <button className="gold-button" disabled={!selectedCardId} onClick={() => chooseDiscardCard(selectedCardId)}>
             Confirm Pick
           </button>
         </div>

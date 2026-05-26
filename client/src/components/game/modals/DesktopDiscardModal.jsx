@@ -1,18 +1,16 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { DiscardCardGrid } from "./DiscardCardGrid.jsx";
 
-export const DesktopDiscardModal = ({ playingCards = [], goalCards = [], title = "Discard Pile", onClose, onExpandGoal }) => {
-  const cards = [
-    ...playingCards.map((card) => ({ ...card, pileLabel: "Playing discard", isGoalCard: false })),
-    ...goalCards.map((card) => ({ ...card, pileLabel: "Goal discard", isGoalCard: true })),
-  ].reverse();
+export const DesktopDiscardModal = ({ cards, title }) => {
+  const { closeModal } = useGame();
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <section className="discard-modal" onClick={(event) => event.stopPropagation()}>
         <p className="eyebrow" style={{ textAlign: "center" }}>Table Memory</p>
         <h2 className="discard-modal-title">{title}</h2>
-        <DiscardCardGrid cards={cards} onExpandGoal={onExpandGoal} />
-        <button className="ghost-button discard-modal-close" onClick={onClose}>Close</button>
+        <DiscardCardGrid cards={cards} />
+        <button className="ghost-button discard-modal-close" onClick={closeModal}>Close</button>
       </section>
     </div>
   );
