@@ -15,7 +15,7 @@ export const StorageModal = () => {
           </div>
         </div>
         <div className="storage-modal-body">
-          <StorageCards cards={player?.storage || []} />
+          <StorageCards cards={player?.storage} />
         </div>
         <button type="button" className="modal-confirm-button" onClick={closeModal}>
           Close

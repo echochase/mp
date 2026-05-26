@@ -1,6 +1,10 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { PlayerAvatar } from "../PlayerAvatar.jsx";
 
-export const SeatingOrder = ({ players = [], currentPlayerName, meName, showScore = true }) => {
+export const SeatingOrder = ({ showScore = true }) => {
+  const { gameState, name: meName } = useGame();
+  const { players = [], currentPlayerName } = gameState;
+
   const radius = 40;
   const points = players.map((player, index) => {
     const angle = -90 + (360 / Math.max(players.length, 1)) * index;
