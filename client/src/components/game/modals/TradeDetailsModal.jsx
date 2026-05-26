@@ -8,10 +8,14 @@ export const TradeDetailsModal = () => {
   const trade = gameState.activeTrade;
   if (!trade) return null;
 
+  const responses = trade.responses || [];
   const isInitiator = trade.initiatorName === name;
-  const isParticipant = isInitiator || trade.responderName === name;
-  const canRespond = trade.state === "open" && !isInitiator && (!trade.targetName || trade.targetName === name);
-  const canAccept = trade.state === "configured" && isInitiator;
+  const myResponse = responses.find((r) => r.responderName === name);
+  const isParticipant = isInitiator || Boolean(myResponse) || trade.responderName === name;
+  const canRespond = trade.state === "open"
+    && !isInitiator
+    && (!trade.targetName || trade.targetName === name);
+  const hasResponses = responses.length > 0;
   const canDecline = trade.state !== "scamWindow" && isParticipant;
   const isScamWindow = trade.state === "scamWindow";
 
@@ -32,20 +36,54 @@ export const TradeDetailsModal = () => {
           </p>
         )}
 
-        <div className="trade-offers-grid">
+        {/* Initiator's offer — always shown */}
+        <TradeOffer
+          title={`${trade.initiatorName} offers`}
+          cards={trade.initiatorOffer}
+          handCards={trade.initiatorOfferHand}
+          storageCards={trade.initiatorOfferStorage}
+        />
+
+        {/* During scam window: show the single accepted response */}
+        {isScamWindow && (
           <TradeOffer
-            title={`${trade.initiatorName} offers`}
-            cards={trade.initiatorOffer}
-            handCards={trade.initiatorOfferHand}
-            storageCards={trade.initiatorOfferStorage}
-          />
-          <TradeOffer
-            title={trade.responderName ? `${trade.responderName} offers` : "Waiting for response"}
+            title={`${trade.responderName} offers`}
             cards={trade.responderOffer}
             handCards={trade.responderOfferHand}
             storageCards={trade.responderOfferStorage}
           />
-        </div>
+        )}
+
+        {/* Pre-accept: show all pending responses */}
+        {!isScamWindow && (
+          hasResponses ? (
+            <div className="trade-responses-list">
+              <p className="trade-responses-heading eyebrow">
+                {responses.length === 1 ? "1 response" : `${responses.length} responses`}
+              </p>
+              {responses.map((r) => (
+                <div key={r.responderName} className="trade-response-row">
+                  <TradeOffer
+                    title={`${r.responderName} offers`}
+                    cards={r.offer}
+                    handCards={r.offerHand}
+                    storageCards={r.offerStorage}
+                  />
+                  {isInitiator && (
+                    <button
+                      className="gold-button trade-response-accept-btn"
+                      onClick={() => { acceptTrade(r.responderName); closeModal(); }}
+                    >
+                      Accept
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="trade-no-responses">No responses yet.</p>
+          )
+        )}
 
         {isScamWindow && (
           <div className="scam-window-row">
@@ -55,9 +93,16 @@ export const TradeDetailsModal = () => {
         )}
 
         <div className="trade-panel-actions" style={{ marginTop: 14 }}>
-          {canRespond && <button onClick={() => { closeModal(); openModal("tradeResponse"); }}>Respond</button>}
-          {canAccept && <button className="gold-button" onClick={() => { acceptTrade(); closeModal(); }}>Accept</button>}
-          {canDecline && <button className="danger-outline-button" onClick={() => { declineTrade(); closeModal(); }}>Cancel trade</button>}
+          {canRespond && (
+            <button onClick={() => { closeModal(); openModal("tradeResponse"); }}>
+              {myResponse ? "Update offer" : "Respond"}
+            </button>
+          )}
+          {canDecline && (
+            <button className="danger-outline-button" onClick={() => { declineTrade(); closeModal(); }}>
+              {isInitiator ? "Cancel trade" : "Withdraw offer"}
+            </button>
+          )}
           {isScamWindow && isParticipant && (
             <button className="danger-button" disabled={!me.canPlayScam} onClick={() => { playScam(); closeModal(); }}>
               {me.canPlayScam ? "Play It's a Scam" : trade.scamsPlayed.includes(name) ? "Scam played" : "No scam available"}

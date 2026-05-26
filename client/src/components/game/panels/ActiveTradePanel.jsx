@@ -2,12 +2,12 @@ import { useGame } from "../../../contexts/GameContext.jsx";
 import { CardFace } from "../cards/CardFace.jsx";
 
 export const ActiveTradePanel = () => {
-  const { gameState, name, me, openModal, acceptTrade, playScam } = useGame();
+  const { gameState, name, me, openModal, playScam } = useGame();
 
   const trade = gameState.activeTrade;
   const isInitiator = trade.initiatorName === name;
-  const isParticipant = isInitiator || trade.responderName === name;
-  const canAccept = trade.state === "configured" && isInitiator;
+  const responses = trade.responses || [];
+  const isParticipant = isInitiator || responses.some((r) => r.responderName === name) || trade.responderName === name;
   const isScamWindow = trade.state === "scamWindow";
 
   return (
@@ -35,7 +35,9 @@ export const ActiveTradePanel = () => {
           )}
         </div>
         <div className="trade-panel-actions">
-          {canAccept && <button className="gold-button" onClick={acceptTrade}>Accept</button>}
+          {isInitiator && responses.length > 0 && !isScamWindow && (
+            <span className="trade-response-count-pill">{responses.length} {responses.length === 1 ? "offer" : "offers"}</span>
+          )}
           {isScamWindow && isParticipant && (
             <button className="danger-button" disabled={!me.canPlayScam} onClick={playScam}>
               {me.canPlayScam ? "Play It's a Scam" : trade.scamsPlayed.includes(name) ? "Scam played" : "No scam"}

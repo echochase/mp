@@ -68,7 +68,7 @@ export const GameProvider = ({ socket, name, room, setRoom, roomCode, children }
 
   const rerollGoal = (goalIndex) => socket.emit("reroll-goal", roomCode, { goalIndex });
   const endTurn = () => socket.emit("end-turn", roomCode);
-  const acceptTrade = () => socket.emit("accept-trade", roomCode);
+  const acceptTrade = (responderName) => socket.emit("accept-trade", roomCode, { responderName });
   const declineTrade = () => socket.emit("decline-trade", roomCode);
   const playScam = () => socket.emit("play-scam", roomCode);
   const chooseDiscardCard = (cardId) => socket.emit("choose-discard-card", roomCode, { cardId });

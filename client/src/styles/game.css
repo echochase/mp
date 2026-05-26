@@ -1574,7 +1574,48 @@ button:disabled {
   flex-shrink: 0;
 }
 
+.trade-responses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
 
+.trade-responses-heading {
+  margin: 0 0 2px;
+}
+
+.trade-response-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.trade-response-row .trade-offer-box {
+  flex: 1;
+}
+
+.trade-response-accept-btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.trade-no-responses {
+  margin: 14px 0 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.trade-response-count-pill {
+  padding: 0.25em 0.65em;
+  border-radius: 20px;
+  background: rgba(201, 168, 76, 0.15);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  color: var(--gold-light);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 .action-modal,
 .trade-modal,
