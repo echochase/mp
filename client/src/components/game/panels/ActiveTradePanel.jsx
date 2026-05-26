@@ -1,79 +1,52 @@
 import { useGame } from "../../../contexts/GameContext.jsx";
-import { titleCase, formatCountdown } from "../../../utils/cards.js";
-import { TradeOffer } from "./TradeOffer.jsx";
+import { CardFace } from "../cards/CardFace.jsx";
 
 export const ActiveTradePanel = () => {
-  const { gameState, name, me, now, openModal, acceptTrade, declineTrade, playScam } = useGame();
+  const { gameState, name, me, openModal, acceptTrade, playScam } = useGame();
 
   const trade = gameState.activeTrade;
   const isInitiator = trade.initiatorName === name;
-  const isResponder = trade.responderName === name;
-  const isParticipant = isInitiator || isResponder;
-  const canRespond = trade.state === "open" && !isInitiator && (!trade.targetName || trade.targetName === name);
+  const isParticipant = isInitiator || trade.responderName === name;
   const canAccept = trade.state === "configured" && isInitiator;
-  const canDecline = trade.state !== "scamWindow" && isParticipant;
   const isScamWindow = trade.state === "scamWindow";
 
   return (
-    <section className="game-panel active-trade-panel compact-panel">
-      <div className="trade-panel-header">
-        <div>
-          <p className="eyebrow">Trading</p>
-          <h2>{trade.initiatorName} → {trade.targetName || "Everyone"}</h2>
-          <p>
-            {trade.bindingUsed
-              ? "Binding Contract active. No scams allowed."
-              : "Unprotected trade. Scams may happen after acceptance."}
-          </p>
+    <>
+    <svg width="0" height="0" style={{ position: "absolute" }}>
+      <defs>
+        <clipPath id="trade-panel-clip" clipPathUnits="objectBoundingBox">
+          <path d="M 0.029,0 Q 0,0 0,0.2 L 0,0.8 Q 0,1 0.029,1 L 0.929,1 Q 0.948,1 0.96,0.889 L 0.989,0.611 Q 1,0.5 0.989,0.389 L 0.96,0.111 Q 0.948,0 0.929,0 Z" />
+        </clipPath>
+      </defs>
+    </svg>
+    <section className="active-trade-panel compact-panel">
+      <div className="trade-panel-row">
+        <div className="trade-panel-left">
+          <div className="trade-panel-identity">
+            <p className="eyebrow">Active Trade</p>
+            <p className="trade-panel-participants">{trade.initiatorName} <span>→</span> {trade.targetName || "Everyone"}</p>
+          </div>
+          {(trade.initiatorOffer?.length > 0) && (
+            <div className="trade-panel-offer-strip">
+              {trade.initiatorOffer.map((card) => (
+                <CardFace key={card.id} card={card} compact hoverMode="none" noHoverScale />
+              ))}
+            </div>
+          )}
         </div>
-        <span className={`trade-state-pill ${trade.state}`}>{titleCase(trade.state)}</span>
-      </div>
-
-      {trade.bindingUsed && (
-        <p className="binding-contract-alert">
-          {trade.initiatorName} used Binding Contract on this trade. If the trade is accepted, no one can use It's a Scam.
-        </p>
-      )}
-
-      <div className="trade-offers-grid">
-        <TradeOffer
-          title={`${trade.initiatorName} offers`}
-          cards={trade.initiatorOffer}
-          handCards={trade.initiatorOfferHand}
-          storageCards={trade.initiatorOfferStorage}
-        />
-        <TradeOffer
-          title={trade.responderName ? `${trade.responderName} offers` : "Waiting for response"}
-          cards={trade.responderOffer}
-          handCards={trade.responderOfferHand}
-          storageCards={trade.responderOfferStorage}
-        />
-      </div>
-
-      {isScamWindow && (
-        <div className="scam-window-row">
-          <span>Scam window closes in <strong>{formatCountdown(trade.scamEndsAt, now)}</strong></span>
-          <span>Scams played: {trade.scamsPlayed.length ? trade.scamsPlayed.join(", ") : "none"}</span>
+        <div className="trade-panel-actions">
+          {canAccept && <button className="gold-button" onClick={acceptTrade}>Accept</button>}
+          {isScamWindow && isParticipant && (
+            <button className="danger-button" disabled={!me.canPlayScam} onClick={playScam}>
+              {me.canPlayScam ? "Play It's a Scam" : trade.scamsPlayed.includes(name) ? "Scam played" : "No scam"}
+            </button>
+          )}
         </div>
-      )}
-
-      <div className="trade-panel-actions">
-        {canRespond && <button onClick={() => openModal("tradeResponse")}>Respond to trade</button>}
-        {canAccept && <button className="gold-button" onClick={acceptTrade}>Accept trade</button>}
-        {canDecline && <button className="danger-outline-button" onClick={declineTrade}>Cancel trade</button>}
-        {isScamWindow && isParticipant && (
-          <button className="danger-button" disabled={!me.canPlayScam} onClick={playScam}>
-            {me.canPlayScam
-              ? "Play It's a Scam"
-              : trade.scamsPlayed.includes(name)
-                ? "Scam played"
-                : "No scam available"}
-          </button>
-        )}
-        {!canRespond && !canAccept && !canDecline && !isScamWindow && (
-          <span className="card-state-chip">Waiting...</span>
-        )}
+        <button className="trade-panel-chevron" onClick={() => openModal("tradeDetails")} aria-label="View trade details">
+          ›
+        </button>
       </div>
     </section>
+    </>
   );
 };

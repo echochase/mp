@@ -4,6 +4,7 @@ import { TablePlayerChip } from "./TablePlayerChip.jsx";
 import { StorageCards } from "./StorageCards.jsx";
 import { TableDiscardPile } from "./TableDiscardPile.jsx";
 import { DrawDeck } from "./DrawDeck.jsx";
+import { ActiveTradePanel } from "../panels/ActiveTradePanel.jsx";
 import { MobilePendingActionPanel } from "../mobile/MobilePendingActionPanel.jsx";
 import { MobileResolvedActionPanel } from "../mobile/MobileResolvedActionPanel.jsx";
 import { MobileTableDashboard } from "../mobile/MobileTableDashboard.jsx";
@@ -60,20 +61,26 @@ export const TableTopView = () => {
           )}
         </div>
 
-        {/* Table centre — draw deck + two discard piles */}
-        <div className="tabletop-center">
-          <TableDiscardPile
-            cards={gameState.discardPile?.goals}
-            label="Goal Discard"
-            onOpen={() => openModal("goalDiscard")}
-          />
-          <DrawDeck />
-          <TableDiscardPile
-            cards={gameState.discardPile?.playing}
-            label="Card Discard"
-            onOpen={() => openModal("discardPile")}
-          />
-        </div>
+        {/* Table centre — trade panel or draw deck + discard piles */}
+        {gameState.activeTrade ? (
+          <div className="trade-panel-centering-wrapper">
+            <ActiveTradePanel />
+          </div>
+        ) : (
+          <div className="tabletop-center">
+            <TableDiscardPile
+              cards={gameState.discardPile?.goals}
+              label="Goal Discard"
+              onOpen={() => openModal("goalDiscard")}
+            />
+            <DrawDeck />
+            <TableDiscardPile
+              cards={gameState.discardPile?.playing}
+              label="Card Discard"
+              onOpen={() => openModal("discardPile")}
+            />
+          </div>
+        )}
 
         <div
           className={`mobile-play-space${canPlayDraggedAction ? " action-drop-ready" : ""}${isPlaySpaceDragOver ? " action-drop-over" : ""}`}
