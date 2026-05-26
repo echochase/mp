@@ -29,7 +29,7 @@ export const MagicHandChoiceModal = () => {
               aria-label={`Choose ${card.name || titleCase(card.key || "card")}`}
               title={card.name || titleCase(card.key || "card")}
             >
-              <CardFace card={card} compact hoverMode="none" noHoverScale className="magic-hand-choice-face" />
+              <CardFace card={card} compact hoverMode="none" noHoverScale />
             </button>
           ))}
         </div>
