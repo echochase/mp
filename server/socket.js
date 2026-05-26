@@ -273,7 +273,7 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 5,
     description: 'Collect 7 different resource cards in your storage.',
-    custom: 'sevenDifferentResources',
+    minUniqueResources: 7,
   },
   {
     key: 'wizard',
@@ -281,7 +281,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 4,
     description: "Use Oracle's Power or Total Renewal.",
-    custom: 'usedOracleOrRenewal',
   },
   {
     key: 'jeweller',
@@ -297,7 +296,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 3,
     description: 'Use Magic Hand to take a Gold or Diamond from the discard pile.',
-    custom: 'fishingForGold',
   },
   {
     key: 'jewelleryCollector',
@@ -329,7 +327,6 @@ const GOAL_CARD_DEFS = [
     count: 3,
     points: 1,
     description: "Trade with another player without using an It's a Scam card.",
-    custom: 'cleanTrade',
   },
   {
     key: 'robinHood',
@@ -337,7 +334,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 2,
     description: 'Use Theft or Robbery on the player with the most resource cards in their storage.',
-    custom: 'robinHoodHit',
   },
   {
     key: 'lawEnforcer',
@@ -345,7 +341,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 2,
     description: "Use I Think Not or Absolutely Not on another player's It's a Scam card.",
-    custom: 'stoppedScam',
   },
   {
     key: 'action-ready',
@@ -987,8 +982,8 @@ function cancelPendingCard(roomData, targetPending, options = {}) {
   roomData.playDiscard.push(targetPending.card);
   const cancellingPlayer = options.cancellingPlayer || null;
   if (targetPending.card.key === 'itsAScam' && cancellingPlayer) {
-    cancellingPlayer.flags = cancellingPlayer.flags || {};
-    cancellingPlayer.flags.stoppedScam = true;
+    const goalIndex = (cancellingPlayer.goals || []).findIndex((g) => g.key === 'lawEnforcer');
+    if (goalIndex !== -1) completeGoal(roomData, cancellingPlayer, goalIndex);
   }
 
   if (targetPending.card.key === 'iThinkNot' && targetPending.targetPending) {
@@ -1060,7 +1055,7 @@ function resolveStandardPendingAction(roomData, pending) {
   actor.actionPlayed = true;
   roomData.log.push(`${actor.name}'s ${pending.card.name} resolved${result.logSuffix || ''}.`);
   if (!roomData.pendingChoice) pushNotice(roomData, `${actor.name}'s ${pending.card.name} resolved.`, 'action');
-  markGoalFlags(roomData, actor, pending.card, pending.payload);
+  completeActionBasedGoals(roomData, actor, pending.card, pending.payload);
 }
 
 function finalizePendingAction(roomData, pendingId) {
@@ -1406,10 +1401,10 @@ function acceptTrade(roomData, socketId) {
   roomData.log.push(`${initiator.name} accepted ${responder.name}'s trade.`);
 
   if (trade.bindingUsed) {
-    initiator.flags = initiator.flags || {};
-    responder.flags = responder.flags || {};
-    initiator.flags.cleanTrade = true;
-    responder.flags.cleanTrade = true;
+    const initiatorGoalIndex = (initiator.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (initiatorGoalIndex !== -1) completeGoal(roomData, initiator, initiatorGoalIndex);
+    const responderGoalIndex = (responder.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (responderGoalIndex !== -1) completeGoal(roomData, responder, responderGoalIndex);
     roomData.log.push('Binding Contract: no scam window.');
     pushNotice(roomData, 'Protected trade completed.', 'trade');
     roomData.activeTrade = null;
@@ -1492,10 +1487,10 @@ function finalizeScamWindow(roomData, tradeId) {
   }
 
   if (!initiatorScammed && !responderScammed) {
-    initiator.flags = initiator.flags || {};
-    responder.flags = responder.flags || {};
-    initiator.flags.cleanTrade = true;
-    responder.flags.cleanTrade = true;
+    const initiatorGoalIndex = (initiator.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (initiatorGoalIndex !== -1) completeGoal(roomData, initiator, initiatorGoalIndex);
+    const responderGoalIndex = (responder.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (responderGoalIndex !== -1) completeGoal(roomData, responder, responderGoalIndex);
     roomData.log.push(`${initiator.name} and ${responder.name} completed a clean trade.`);
   } else if (initiatorScammed && responderScammed) {
     roomData.log.push('Both players scammed. Each player took back their offered cards.');
@@ -1532,13 +1527,8 @@ function chooseDiscardCard(roomData, socketId, payload) {
   const [chosen] = roomData.playDiscard.splice(discardIndex, 1);
   player.hand.push(chosen);
   if (chosen.key === 'gold' || chosen.key === 'diamond') {
-    player.flags = player.flags || {};
-    const previousFishingCount = typeof player.flags.fishingForGold === 'number'
-      ? player.flags.fishingForGold
-      : player.flags.fishingForGold
-        ? 1
-        : 0;
-    player.flags.fishingForGold = previousFishingCount + 1;
+    const goalIndex = (player.goals || []).findIndex((g) => g.key === 'fishingForGold');
+    if (goalIndex !== -1) completeGoal(roomData, player, goalIndex);
   }
   roomData.pendingChoice = null;
   roomData.log.push(`${player.name} took ${chosen.name} from the discard pile with Magic Hand.`);
@@ -1754,15 +1744,6 @@ function calculateInvestorPoints(moneyCount) {
 function completeGoal(roomData, player, goalIndex, scoreOverride, logDetail = '') {
   const [completed] = player.goals.splice(goalIndex, 1);
   const points = Number.isFinite(scoreOverride) ? scoreOverride : completed.points || 1;
-  if (completed.custom === 'fishingForGold' && player.flags) {
-    const fishingCount = typeof player.flags.fishingForGold === 'number'
-      ? player.flags.fishingForGold
-      : player.flags.fishingForGold
-        ? 1
-        : 0;
-    player.flags.fishingForGold = Math.max(0, fishingCount - 1);
-  }
-
   player.score += points;
   if (!player.completedGoals) player.completedGoals = [];
   player.completedGoals.push({ ...completed, pointsAwarded: points });
@@ -1796,16 +1777,15 @@ function autoCompleteGoals(roomData, player) {
   }
 }
 
-function markGoalFlags(roomData, player, card, payload) {
-  player.flags = player.flags || {};
+function completeActionBasedGoals(roomData, player, card, payload) {
   if (card.key === 'oraclesPower' || card.key === 'totalRenewal') {
-    player.flags.usedOracleOrRenewal = true;
+    const goalIndex = (player.goals || []).findIndex((g) => g.key === 'wizard');
+    if (goalIndex !== -1) completeGoal(roomData, player, goalIndex);
   }
 
-  if ((card.key === 'theft' || card.key === 'robbery') && payload.targetName) {
-    if (payload.targetHadMostResourcesBeforeAction) {
-      player.flags.robinHoodHit = true;
-    }
+  if ((card.key === 'theft' || card.key === 'robbery') && payload.targetHadMostResourcesBeforeAction) {
+    const goalIndex = (player.goals || []).findIndex((g) => g.key === 'robinHood');
+    if (goalIndex !== -1) completeGoal(roomData, player, goalIndex);
   }
 }
 
@@ -1816,21 +1796,11 @@ function canCompleteGoal(player, goal) {
   if (goal.requirement && !meetsRequirement(counts, goal.requirement)) return false;
   if (goal.anyRequirement && !goal.anyRequirement.some((req) => meetsRequirement(counts, req))) return false;
 
-  if (goal.custom === 'sevenDifferentResources') {
+  if (goal.minUniqueResources) {
     const uniqueResources = new Set(player.storage.filter((c) => c.type === 'resource').map((c) => c.key));
-    return uniqueResources.size >= 7;
+    return uniqueResources.size >= goal.minUniqueResources;
   }
 
-  if (goal.custom === 'fishingForGold') {
-    const fishingCount = typeof player.flags?.fishingForGold === 'number'
-      ? player.flags.fishingForGold
-      : player.flags?.fishingForGold
-        ? 1
-        : 0;
-    return fishingCount > 0;
-  }
-
-  if (goal.custom) return Boolean(player.flags?.[goal.custom]);
   return Boolean(goal.requirement || goal.anyRequirement);
 }
 
@@ -1921,7 +1891,7 @@ function buildDeck(defs) {
         tradeTool: Boolean(def.tradeTool),
         requirement: def.requirement,
         anyRequirement: def.anyRequirement,
-        custom: def.custom,
+        minUniqueResources: def.minUniqueResources,
       });
     }
   }
