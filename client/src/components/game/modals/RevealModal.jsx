@@ -1,7 +1,10 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { hyphenateLongWords } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const RevealModal = ({ reveal, onClose }) => {
+export const RevealModal = () => {
+  const { activeReveal: reveal, dismissReveal } = useGame();
+
   const isActionReady = reveal.type === "actionReadyReveal";
   const title = isActionReady
     ? `${reveal.actorName} completed Action-Ready`
@@ -12,14 +15,14 @@ export const RevealModal = ({ reveal, onClose }) => {
     : "That player has no cards in hand.";
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={dismissReveal}>
       <section className="discard-modal oracle-reveal-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">{eyebrow}</p>
             <h2>{hyphenateLongWords(title)}</h2>
           </div>
-          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={dismissReveal}>✕</button>
         </div>
         {isActionReady && (
           <p className="modal-description">
@@ -38,7 +41,7 @@ export const RevealModal = ({ reveal, onClose }) => {
             ))}
           </div>
         )}
-        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={dismissReveal}>
           Close
         </button>
       </section>

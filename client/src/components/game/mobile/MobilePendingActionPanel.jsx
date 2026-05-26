@@ -1,8 +1,12 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { CANCEL_REACTION_KEYS, formatCountdown, getPendingActionContext } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const MobilePendingActionInPlaySpace = ({ pendingAction, me, now, reactionHand = [], onReact }) => {
-  const reactionCards = reactionHand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
+export const MobilePendingActionPanel = () => {
+  const { gameState, me, now, sortedHand, playCard } = useGame();
+  const { pendingAction } = gameState;
+
+  const reactionCards = sortedHand.filter((card) => CANCEL_REACTION_KEYS.includes(card.key));
   const isActor = pendingAction.actorName === me.name;
 
   return (
@@ -23,7 +27,7 @@ export const MobilePendingActionInPlaySpace = ({ pendingAction, me, now, reactio
             type="button"
             className="danger-button"
             key={card.id}
-            onClick={() => onReact?.(card)}
+            onClick={() => playCard(card)}
             disabled={!me.canReactToAction}
           >
             {card.name}

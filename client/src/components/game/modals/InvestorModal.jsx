@@ -1,7 +1,13 @@
 import { useState } from "react";
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { MiniMoneyCard } from "./MiniMoneyCard.jsx";
 
-export const InvestorModal = ({ goal, goalIndex, storage, opponents, defaultTargetName, onClose, onConfirm }) => {
+export const InvestorModal = () => {
+  const { activeModal, me, opponents, defaultTargetName, closeModal, completeInvestor } = useGame();
+
+  const { goal, goalIndex } = activeModal;
+  const { storage } = me;
+
   const moneyCards = storage.filter((card) => card.key === "money");
   const [selectedIds, setSelectedIds] = useState([]);
   const [target, setTarget] = useState(
@@ -16,14 +22,14 @@ export const InvestorModal = ({ goal, goalIndex, storage, opponents, defaultTarg
   const removeCard = (cardId) => setSelectedIds((ids) => ids.filter((id) => id !== cardId));
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <section className="investor-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Special completion</p>
             <h2>Investor</h2>
           </div>
-          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={closeModal}>✕</button>
         </div>
 
         <p className="modal-description">{goal.description}</p>
@@ -84,11 +90,11 @@ export const InvestorModal = ({ goal, goalIndex, storage, opponents, defaultTarg
         <button
           className="gold-button investor-confirm-button"
           disabled={selectedIds.length < 2 || !target}
-          onClick={() => onConfirm({ goalIndex, targetName: target, moneyCardIds: selectedIds })}
+          onClick={() => completeInvestor({ goalIndex, targetName: target, moneyCardIds: selectedIds })}
         >
           Confirm Investment
         </button>
-        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={closeModal}>
           Close
         </button>
       </section>

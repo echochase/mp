@@ -1,5 +1,6 @@
 import { getCardImage } from "../../../utils/images.js";
 import { titleCase, hyphenateLongWords } from "../../../utils/cards.js";
+import { useGame } from "../../../contexts/GameContext.jsx";
 
 export const CardFace = ({
   card,
@@ -9,9 +10,11 @@ export const CardFace = ({
   hoverButtonLabel = "Expand",
   hoverButtonDisabled = false,
   onHoverButtonClick,
-  onClick,
+  onClickExpand = false,
   noHoverScale = false,
 }) => {
+  const { openModal } = useGame();
+
   const image = getCardImage(card);
   const cardTitle = card?.name || titleCase(card?.key || "Card");
   const cardDisplayTitle = hyphenateLongWords(cardTitle);
@@ -44,7 +47,7 @@ export const CardFace = ({
     <div
       className={`card-face-button ${compact ? "compact-face" : ""} ${noHoverScale ? "no-hover-scale" : ""} hover-mode-${effectiveHoverMode} ${className}`}
       aria-label={cardTitle}
-      onClick={onClick}
+      onClick={onClickExpand ? () => openModal("expandedCard", { card }) : undefined}
     >
       {image ? <img src={image} alt={cardTitle} /> : <div className="card-fallback">{cardDisplayTitle}</div>}
       {renderHoverLayer()}

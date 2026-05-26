@@ -1,8 +1,14 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { hyphenateLongWords } from "../../../utils/cards.js";
 import { CardFace } from "../cards/CardFace.jsx";
 
-export const CompletedGoalsPanel = ({ completedGoals = [], onOpen, onExpandGoal }) => {
+export const CompletedGoalsPanel = () => {
+  const { me, openModal } = useGame();
+  const { completedGoals = [] } = me;
+
   const topGoal = completedGoals[completedGoals.length - 1];
+
+  const onOpen = () => openModal("completedGoals");
 
   return (
     <section className="game-panel compact-panel completed-goals-panel">
@@ -32,7 +38,7 @@ export const CompletedGoalsPanel = ({ completedGoals = [], onOpen, onExpandGoal 
                 key={idx}
                 type="button"
                 className="completed-goal-entry completed-goal-button"
-                onClick={() => onExpandGoal(goal)}
+                onClick={() => openModal("expandedCard", { card: goal })}
               >
                 <span className="completed-goal-name">{hyphenateLongWords(goal.name)}</span>
                 <span className="completed-goal-pts">+{goal.pointsAwarded ?? goal.points ?? 1} pt</span>

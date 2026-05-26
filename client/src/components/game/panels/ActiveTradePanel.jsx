@@ -1,7 +1,11 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { titleCase, formatCountdown } from "../../../utils/cards.js";
 import { TradeOffer } from "./TradeOffer.jsx";
 
-export const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, onDecline, onScam }) => {
+export const ActiveTradePanel = () => {
+  const { gameState, name, me, now, openModal, acceptTrade, declineTrade, playScam } = useGame();
+
+  const trade = gameState.activeTrade;
   const isInitiator = trade.initiatorName === name;
   const isResponder = trade.responderName === name;
   const isParticipant = isInitiator || isResponder;
@@ -54,11 +58,11 @@ export const ActiveTradePanel = ({ trade, name, me, now, onRespond, onAccept, on
       )}
 
       <div className="trade-panel-actions">
-        {canRespond && <button onClick={onRespond}>Respond to trade</button>}
-        {canAccept && <button className="gold-button" onClick={onAccept}>Accept trade</button>}
-        {canDecline && <button className="danger-outline-button" onClick={onDecline}>Cancel trade</button>}
+        {canRespond && <button onClick={() => openModal("tradeResponse")}>Respond to trade</button>}
+        {canAccept && <button className="gold-button" onClick={acceptTrade}>Accept trade</button>}
+        {canDecline && <button className="danger-outline-button" onClick={declineTrade}>Cancel trade</button>}
         {isScamWindow && isParticipant && (
-          <button className="danger-button" disabled={!me.canPlayScam} onClick={onScam}>
+          <button className="danger-button" disabled={!me.canPlayScam} onClick={playScam}>
             {me.canPlayScam
               ? "Play It's a Scam"
               : trade.scamsPlayed.includes(name)

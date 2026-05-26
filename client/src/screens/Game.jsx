@@ -1,18 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useGameSocket } from "../hooks/useGameSocket.js";
-import { useGameEffects } from "../hooks/useGameEffects.js";
-import { useCardPermissions } from "../hooks/useCardPermissions.js";
 import "../styles/game.css";
-import { CANCEL_REACTION_KEYS, TARGETED_ACTION_KEYS, sortCards } from "../utils/cards.js";
+import { GameProvider, useGame } from "../contexts/GameContext.jsx";
 import { PlayerAvatar } from "../components/game/PlayerAvatar.jsx";
 import { GoalCard } from "../components/game/cards/GoalCard.jsx";
-import { PendingActionPanel } from "../components/game/panels/PendingActionPanel.jsx";
+import { DesktopPendingActionPanel } from "../components/game/panels/DesktopPendingActionPanel.jsx";
 import { ActiveTradePanel } from "../components/game/panels/ActiveTradePanel.jsx";
 import { CompletedGoalsPanel } from "../components/game/panels/CompletedGoalsPanel.jsx";
 import { HandPanel } from "../components/game/panels/HandPanel.jsx";
 import { MyProgressPanel } from "../components/game/panels/MyProgressPanel.jsx";
-import { MobileTableDashboard } from "../components/game/panels/MobileTableDashboard.jsx";
 import { TableTopView } from "../components/game/table/TableTopView.jsx";
 import { SeatingOrder } from "../components/game/table/SeatingOrder.jsx";
 import { ActionTargetModal } from "../components/game/modals/ActionTargetModal.jsx";
@@ -20,192 +16,39 @@ import { TradeBuilderModal } from "../components/game/modals/TradeBuilderModal.j
 import { TradeResponseModal } from "../components/game/modals/TradeResponseModal.jsx";
 import { ActionCardSelectionModal } from "../components/game/modals/ActionCardSelectionModal.jsx";
 import { InvestorModal } from "../components/game/modals/InvestorModal.jsx";
-import { CombinedDiscardModal } from "../components/game/modals/CombinedDiscardModal.jsx";
-import { DiscardPileModal } from "../components/game/modals/DiscardPileModal.jsx";
+import { DesktopDiscardModal } from "../components/game/modals/DesktopDiscardModal.jsx";
+import { MobileDiscardModal } from "../components/game/mobile/MobileDiscardModal.jsx";
 import { MagicHandChoiceModal } from "../components/game/modals/MagicHandChoiceModal.jsx";
-import { ExpandedGoalCardModal } from "../components/game/modals/ExpandedGoalCardModal.jsx";
+import { ExpandedCardModal } from "../components/game/modals/ExpandedCardModal.jsx";
 import { RevealModal } from "../components/game/modals/RevealModal.jsx";
 import { TableLogModal } from "../components/game/modals/TableLogModal.jsx";
 import { StorageModal } from "../components/game/modals/StorageModal.jsx";
 import { SeatingOrderModal } from "../components/game/modals/SeatingOrderModal.jsx";
 
-export const Game = ({ socket, name, room, setRoom }) => {
-  const { roomCode } = useParams();
+const GameLayout = () => {
+  const {
+    gameState, error, me, name, roomCode,
+    magicHandChoice, turnPulse, noticeToast,
+    activeModal, openModal, closeModal, activeReveal, dismissReveal,
+    leaveTable, completeActionReady, completeMeditator,
+  } = useGame();
+
   const navigate = useNavigate();
-  const { gameState, error } = useGameSocket(socket, name, roomCode, room, setRoom);
-  const { newCardIds, turnPulse, noticeToast, resolvedMobileAction, now } = useGameEffects(gameState);
-  const [discardPileOpen, setDiscardPileOpen] = useState(false);
-  const [goalDiscardPileOpen, setGoalDiscardPileOpen] = useState(false);
-  const [combinedDiscardOpen, setCombinedDiscardOpen] = useState(false);
-  const [completedGoalsPileOpen, setCompletedGoalsPileOpen] = useState(false);
-  const [expandedGoalCard, setExpandedGoalCard] = useState(null);
-  const [dismissedRevealIds, setDismissedRevealIds] = useState(new Set());
-  const [investorGoal, setInvestorGoal] = useState(null);
-  const [actionReadyGoal, setActionReadyGoal] = useState(null);
-  const [meditatorGoal, setMeditatorGoal] = useState(null);
-  const [actionModalCard, setActionModalCard] = useState(null);
-  const [tradeBuilderOpen, setTradeBuilderOpen] = useState(false);
-  const [tradeResponseOpen, setTradeResponseOpen] = useState(false);
-  const [tableLogOpen, setTableLogOpen] = useState(false);
-  const [seatingOrderOpen, setSeatingOrderOpen] = useState(false);
-  const [expandedStoragePlayer, setExpandedStoragePlayer] = useState(null);
-
-  useEffect(() => {
-    if (!gameState?.activeTrade) setTradeResponseOpen(false);
-  }, [gameState?.activeTrade]);
-
-  const me = gameState?.me;
-  const opponents = useMemo(
-    () => gameState?.players?.filter((player) => player.name !== name) || [],
-    [gameState, name]
-  );
-
-  const defaultTargetName = opponents[0]?.name || "";
-  const currentTurnPlayer = gameState?.players?.find((player) => player.name === gameState.currentPlayerName);
-  const activeReveal = me?.privateReveal && !dismissedRevealIds.has(me.privateReveal.id) ? me.privateReveal : null;
-  const magicHandChoice = me?.pendingChoice?.type === "magicHandDiscard" ? me.pendingChoice : null;
-
-  const sortedHand = useMemo(
-    () =>
-      (me?.hand || [])
-        .map((card, originalIndex) => ({ ...card, originalIndex }))
-        .sort(sortCards),
-    [me?.hand]
-  );
-
-  const { canStoreResourceCard, canPlayActionCard, tableLocked } = useCardPermissions(gameState, me);
 
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key !== "Escape") return;
-
       let handled = true;
-      if (actionModalCard) setActionModalCard(null);
-      else if (tradeResponseOpen) setTradeResponseOpen(false);
-      else if (tradeBuilderOpen) setTradeBuilderOpen(false);
-      else if (investorGoal) setInvestorGoal(null);
-      else if (actionReadyGoal) setActionReadyGoal(null);
-      else if (meditatorGoal) setMeditatorGoal(null);
-      else if (expandedGoalCard) setExpandedGoalCard(null);
-      else if (expandedStoragePlayer) setExpandedStoragePlayer(null);
-      else if (completedGoalsPileOpen) setCompletedGoalsPileOpen(false);
-      else if (combinedDiscardOpen) setCombinedDiscardOpen(false);
-      else if (goalDiscardPileOpen) setGoalDiscardPileOpen(false);
-      else if (discardPileOpen) setDiscardPileOpen(false);
-      else if (tableLogOpen) setTableLogOpen(false);
-      else if (seatingOrderOpen) setSeatingOrderOpen(false);
-      else if (activeReveal) {
-        setDismissedRevealIds((ids) => new Set([...ids, activeReveal.id]));
-      } else {
-        handled = false;
-      }
-
-      if (handled) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
+      if (activeModal) closeModal();
+      else if (activeReveal) dismissReveal();
+      else handled = false;
+      if (handled) { event.preventDefault(); event.stopPropagation(); }
     };
-
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [
-    actionModalCard,
-    tradeResponseOpen,
-    tradeBuilderOpen,
-    investorGoal,
-    actionReadyGoal,
-    meditatorGoal,
-    expandedGoalCard,
-    expandedStoragePlayer,
-    completedGoalsPileOpen,
-    combinedDiscardOpen,
-    goalDiscardPileOpen,
-    discardPileOpen,
-    tableLogOpen,
-    seatingOrderOpen,
-    activeReveal,
-  ]);
+  }, [activeModal, activeReveal, closeModal, dismissReveal]);
 
-  const playCard = (card, extraPayload = {}) => {
-    socket.emit("play-card", roomCode, { cardIndex: card.originalIndex, ...extraPayload });
-  };
-
-  const beginPlayCard = (card) => {
-    const needsModal = TARGETED_ACTION_KEYS.includes(card.key) || card.needsTarget;
-    if (needsModal && card.type === "action" && !CANCEL_REACTION_KEYS.includes(card.key)) {
-      setActionModalCard(card);
-      return;
-    }
-    playCard(card, {});
-  };
-
-  const discardCard = (card) =>
-    socket.emit("discard-card", roomCode, { cardIndex: card.originalIndex });
-
-  const rerollGoal = (goalIndex) => socket.emit("reroll-goal", roomCode, { goalIndex });
-
-  const completeInvestor = ({ goalIndex, targetName: investorTargetName, moneyCardIds }) => {
-    socket.emit("complete-investor", roomCode, {
-      goalIndex,
-      targetName: investorTargetName,
-      moneyCardIds,
-    });
-    setInvestorGoal(null);
-  };
-
-  const completeActionReady = ({ goalIndex, actionCardIds }) => {
-    socket.emit("complete-action-ready", roomCode, {
-      goalIndex,
-      actionCardIds,
-    });
-    setActionReadyGoal(null);
-  };
-
-  const completeMeditator = ({ goalIndex, actionCardIds }) => {
-    socket.emit("complete-meditator", roomCode, {
-      goalIndex,
-      actionCardIds,
-    });
-    setMeditatorGoal(null);
-  };
-
-  const createTrade = (payload) => {
-    socket.emit("create-trade", roomCode, payload);
-    setTradeBuilderOpen(false);
-  };
-
-  const respondTrade = (payload) => {
-    socket.emit("respond-trade", roomCode, payload);
-    setTradeResponseOpen(false);
-  };
-
-  const acceptTrade = () => socket.emit("accept-trade", roomCode);
-  const declineTrade = () => socket.emit("decline-trade", roomCode);
-  const playScam = () => socket.emit("play-scam", roomCode);
-  const chooseDiscardCard = (cardId) => socket.emit("choose-discard-card", roomCode, { cardId });
-  const endTurn = () => socket.emit("end-turn", roomCode);
-
-  const storeResourceCard = (card) => {
-    if (!canStoreResourceCard(card)) return;
-    playCard(card);
-  };
-
-  const handleResourceDrop = (cardId) => {
-    const resourceCard = sortedHand.find((card) => String(card.id) === String(cardId));
-    storeResourceCard(resourceCard);
-  };
-
-  const handleActionDrop = (cardId) => {
-    const actionCard = sortedHand.find((card) => String(card.id) === String(cardId));
-    if (canPlayActionCard(actionCard)) beginPlayCard(actionCard);
-  };
-
-  const leaveTable = () => {
-    socket.emit("leave-room", roomCode, name);
-    navigate("/");
-  };
-
-  if (!socket || !gameState || !me) {
+  if (!gameState || !me) {
     return (
       <main className="game-page game-page-centered">
         <section className="game-panel loading-panel">
@@ -217,19 +60,18 @@ export const Game = ({ socket, name, room, setRoom }) => {
   }
 
   const playerCount = gameState.players?.length || 0;
+  const currentTurnPlayer = gameState.players?.find((p) => p.name === gameState.currentPlayerName);
+
   const tableLayoutClassName = [
     "table-layout",
     playerCount < 4 ? "mobile-low-player-count" : "",
     playerCount < 6 ? "mobile-under-full-lobby" : "mobile-full-lobby",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
+
   const gamePageClassName = [
     "game-page",
     playerCount < 6 ? "mobile-under-full-lobby-page" : "mobile-full-lobby-page",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
 
   return (
     <main className={gamePageClassName}>
@@ -278,10 +120,10 @@ export const Game = ({ socket, name, room, setRoom }) => {
       )}
 
       <section className={tableLayoutClassName}>
-        {/* ── LEFT SIDEBAR: progress + goals + completed goals ── */}
+        {/* ── LEFT SIDEBAR ── */}
         <aside className="game-sidebar left-game-sidebar">
           <div className="mobile-progress-goals-combo">
-            <MyProgressPanel me={me} isCurrent={me.name === gameState.currentPlayerName} />
+            <MyProgressPanel />
             <section className="game-panel goals-panel compact-panel compact-goals-panel">
               <div className="panel-heading small-heading goals-panel-heading">
                 <p className="eyebrow">Private</p>
@@ -289,109 +131,23 @@ export const Game = ({ socket, name, room, setRoom }) => {
               </div>
               <div className="goals-grid compact-goals-grid">
                 {me.goals.map((goal, index) => (
-                  <GoalCard
-                    key={goal.id || `${goal.key}-${index}`}
-                    goal={goal}
-                    index={index}
-                    disabled={Boolean(gameState.winner) || tableLocked}
-                    isYourTurn={me.isYourTurn}
-                    goalRerolled={me.goalRerolled}
-                    onReroll={() => rerollGoal(index)}
-                    onInvestor={() => setInvestorGoal({ goal, goalIndex: index })}
-                    onActionReady={() => setActionReadyGoal({ goal, goalIndex: index })}
-                    onMeditator={() => setMeditatorGoal({ goal, goalIndex: index })}
-                    actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
-                    onExpand={() => setExpandedGoalCard(goal)}
-                  />
+                  <GoalCard key={goal.id || `${goal.key}-${index}`} goal={goal} index={index} />
                 ))}
               </div>
             </section>
           </div>
-          <CompletedGoalsPanel
-            completedGoals={me.completedGoals || []}
-            onOpen={() => setCompletedGoalsPileOpen(true)}
-            onExpandGoal={setExpandedGoalCard}
-          />
+          <CompletedGoalsPanel />
         </aside>
 
-        {/* ── CENTRE: tabletop ── */}
+        {/* ── CENTRE ── */}
         <section className="tabletop-column">
-          {gameState.pendingAction && (
-            <PendingActionPanel
-              pendingAction={gameState.pendingAction}
-              me={me}
-              now={now}
-              onReact={(card) => playCard(card)}
-              hand={sortedHand}
-            />
-          )}
-          {gameState.activeTrade && (
-            <ActiveTradePanel
-              trade={gameState.activeTrade}
-              name={name}
-              me={me}
-              now={now}
-              onRespond={() => setTradeResponseOpen(true)}
-              onAccept={acceptTrade}
-              onDecline={declineTrade}
-              onScam={playScam}
-            />
-          )}
-          <TableTopView
-            players={gameState.players}
-            me={me}
-            currentPlayerName={gameState.currentPlayerName}
-            meName={name}
-            discardPile={gameState.discardPile}
-            deckCounts={gameState.deckCounts}
-            canStoreDraggedResource={sortedHand.some(canStoreResourceCard)}
-            onStoreResourceDrop={handleResourceDrop}
-            onOpenCardDiscard={() => setDiscardPileOpen(true)}
-            onOpenGoalDiscard={() => setGoalDiscardPileOpen(true)}
-            canPlayDraggedAction={sortedHand.some(canPlayActionCard)}
-            onActionCardDrop={handleActionDrop}
-            pendingAction={gameState.pendingAction}
-            resolvedMobileAction={resolvedMobileAction}
-            now={now}
-            reactionHand={sortedHand}
-            onReact={(card) => playCard(card)}
-            onOpenStorage={(player) => setExpandedStoragePlayer(player)}
-            mobileDashboard={
-              <MobileTableDashboard
-                me={me}
-                isCurrent={me.name === gameState.currentPlayerName}
-                disabled={Boolean(gameState.winner) || tableLocked}
-                onReroll={rerollGoal}
-                onInvestor={(goal, goalIndex) => setInvestorGoal({ goal, goalIndex })}
-                onActionReady={(goal, goalIndex) => setActionReadyGoal({ goal, goalIndex })}
-                onMeditator={(goal, goalIndex) => setMeditatorGoal({ goal, goalIndex })}
-                actionCardsAvailable={(me.hand || []).filter((handCard) => handCard.type === "action").length}
-                onExpandGoal={setExpandedGoalCard}
-                deckCounts={gameState.deckCounts}
-                onOpenSeating={() => setSeatingOrderOpen(true)}
-                onOpenCompleted={() => setCompletedGoalsPileOpen(true)}
-                onOpenLog={() => setTableLogOpen(true)}
-                onOpenDiscarded={() => setCombinedDiscardOpen(true)}
-              />
-            }
-          />
-
-          <HandPanel
-            hand={sortedHand}
-            me={me}
-            gameState={gameState}
-            tableLocked={tableLocked}
-            newCardIds={newCardIds}
-            canStoreResourceCard={canStoreResourceCard}
-            canPlayActionCard={canPlayActionCard}
-            onOpenTrade={() => setTradeBuilderOpen(true)}
-            onEndTurn={endTurn}
-            onPlay={beginPlayCard}
-            onDiscard={discardCard}
-          />
+          {gameState.pendingAction && <DesktopPendingActionPanel />}
+          {gameState.activeTrade && <ActiveTradePanel />}
+          <TableTopView />
+          <HandPanel />
         </section>
 
-        {/* ── RIGHT SIDEBAR: seating order + history ── */}
+        {/* ── RIGHT SIDEBAR ── */}
         <aside className="game-sidebar right-game-sidebar">
           <section className="game-panel compact-panel seating-panel">
             <div className="panel-heading split-heading small-heading seating-heading">
@@ -400,11 +156,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
                 <h2>Seating Order</h2>
               </div>
               <span className="deck-pill seated-count-pill">{gameState.players.length} seated</span>
-              <button
-                className="mobile-seating-expand-button"
-                type="button"
-                onClick={() => setSeatingOrderOpen(true)}
-              >
+              <button className="mobile-seating-expand-button" type="button" onClick={() => openModal("seatingOrder")}>
                 Expand
               </button>
             </div>
@@ -415,12 +167,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
                 <strong>{gameState.winner ? "Game Over" : gameState.currentPlayerName}</strong>
               </div>
             </div>
-            <SeatingOrder
-              players={gameState.players}
-              currentPlayerName={gameState.currentPlayerName}
-              meName={name}
-              showScore={false}
-            />
+            <SeatingOrder showScore={false} />
           </section>
           <section className="game-panel log-panel compact-panel compact-log-panel mobile-collapsed-log-panel">
             <div className="panel-heading split-heading small-heading">
@@ -428,9 +175,7 @@ export const Game = ({ socket, name, room, setRoom }) => {
                 <p className="eyebrow">History</p>
                 <h2>Table Log</h2>
               </div>
-              <button className="mobile-log-expand-button" type="button" onClick={() => setTableLogOpen(true)}>
-                Expand
-              </button>
+              <button className="mobile-log-expand-button" type="button" onClick={() => openModal("tableLog")}>Expand</button>
             </div>
             <div className="log-list compact-log-list">
               {gameState.log.slice().reverse().map((entry, index) => (
@@ -441,157 +186,55 @@ export const Game = ({ socket, name, room, setRoom }) => {
         </aside>
       </section>
 
-      {actionModalCard && (
-        <ActionTargetModal
-          card={actionModalCard}
-          gameState={gameState}
-          me={me}
-          opponents={opponents}
-          defaultTargetName={defaultTargetName}
-          onClose={() => setActionModalCard(null)}
-          onConfirm={(payload) => {
-            playCard(actionModalCard, payload);
-            setActionModalCard(null);
-          }}
-         
-        />
-      )}
-
-      {tradeBuilderOpen && (
-        <TradeBuilderModal
-          hand={sortedHand}
-          storage={me.storage || []}
-          opponents={opponents}
-          defaultTargetName={defaultTargetName}
-          onClose={() => setTradeBuilderOpen(false)}
-          onConfirm={createTrade}
-         
-        />
-      )}
-
-      {tradeResponseOpen && gameState.activeTrade && (
-        <TradeResponseModal
-          hand={sortedHand}
-          storage={me.storage || []}
-          trade={gameState.activeTrade}
-          onClose={() => setTradeResponseOpen(false)}
-          onConfirm={respondTrade}
-         
-        />
-      )}
-
-      {investorGoal && (
-        <InvestorModal
-          goal={investorGoal.goal}
-          goalIndex={investorGoal.goalIndex}
-          storage={me.storage}
-          opponents={opponents}
-          defaultTargetName={defaultTargetName}
-          onClose={() => setInvestorGoal(null)}
-          onConfirm={completeInvestor}
-         
-        />
-      )}
-
-      {actionReadyGoal && (
+      {activeModal?.type === "actionTarget" && <ActionTargetModal />}
+      {activeModal?.type === "tradeBuilder" && <TradeBuilderModal />}
+      {activeModal?.type === "tradeResponse" && gameState.activeTrade && <TradeResponseModal />}
+      {activeModal?.type === "investor" && <InvestorModal />}
+      {activeModal?.type === "actionReady" && (
         <ActionCardSelectionModal
-          goal={actionReadyGoal.goal}
-          goalIndex={actionReadyGoal.goalIndex}
-          hand={me.hand || []}
           requiredCount={7}
           description="Select exactly 7 action cards to reveal to everyone. These cards stay in your hand."
           confirmLabel="Reveal 7 Actions"
           confirmVariant="gold-button"
-          onClose={() => setActionReadyGoal(null)}
           onConfirm={completeActionReady}
         />
       )}
-
-      {meditatorGoal && (
+      {activeModal?.type === "meditator" && (
         <ActionCardSelectionModal
-          goal={meditatorGoal.goal}
-          goalIndex={meditatorGoal.goalIndex}
-          hand={me.hand || []}
           requiredCount={4}
           description="Select exactly 4 action cards to discard. These cards go to the discard pile, and Meditator scores 3 points only if all 4 are valid action cards."
           confirmLabel="Discard 4 Actions"
           confirmVariant="danger-button"
-          onClose={() => setMeditatorGoal(null)}
           onConfirm={completeMeditator}
         />
       )}
-
-      {completedGoalsPileOpen && (
-        <DiscardPileModal
-          title="Completed Goals"
-          goalCards={me.completedGoals || []}
-          onClose={() => setCompletedGoalsPileOpen(false)}
-          onExpandGoal={setExpandedGoalCard}
-        />
+      {activeModal?.type === "completedGoals" && (
+        <DesktopDiscardModal cards={me.completedGoals || []} title="Completed Goals" />
       )}
-
-      {goalDiscardPileOpen && (
-        <DiscardPileModal
-          title="Goal Discard"
-          goalCards={gameState.discardPile?.goals || []}
-          onClose={() => setGoalDiscardPileOpen(false)}
-          onExpandGoal={setExpandedGoalCard}
-        />
+      {activeModal?.type === "goalDiscard" && (
+        <DesktopDiscardModal cards={gameState.discardPile?.goals || []} title="Goal Discard" />
       )}
-
-      {discardPileOpen && (
-        <DiscardPileModal
-          title="Card Discard"
-          playingCards={gameState.discardPile?.playing || []}
-          onClose={() => setDiscardPileOpen(false)}
-        />
+      {activeModal?.type === "discardPile" && (
+        <DesktopDiscardModal cards={gameState.discardPile?.playing || []} title="Card Discard" />
       )}
-
-      {combinedDiscardOpen && (
-        <CombinedDiscardModal
-          playingCards={gameState.discardPile?.playing || []}
-          goalCards={gameState.discardPile?.goals || []}
-          onClose={() => setCombinedDiscardOpen(false)}
-          onExpandGoal={setExpandedGoalCard}
-        />
-      )}
-
-      {magicHandChoice && (
-        <MagicHandChoiceModal choice={magicHandChoice} onConfirm={chooseDiscardCard} />
-      )}
-
-      {activeReveal && (
-        <RevealModal
-          reveal={activeReveal}
-          onClose={() => setDismissedRevealIds((ids) => new Set([...ids, activeReveal.id]))}
-        />
-      )}
-
-      {expandedGoalCard && (
-        <ExpandedGoalCardModal card={expandedGoalCard} onClose={() => setExpandedGoalCard(null)} />
-      )}
-
-      {tableLogOpen && (
-        <TableLogModal log={gameState.log || []} onClose={() => setTableLogOpen(false)} />
-      )}
-
-      {seatingOrderOpen && (
-        <SeatingOrderModal
-          players={gameState.players || []}
-          currentPlayerName={gameState.currentPlayerName}
-          meName={name}
-          onClose={() => setSeatingOrderOpen(false)}
-        />
-      )}
-
-      {expandedStoragePlayer && (
-        <StorageModal
-          player={expandedStoragePlayer}
-          onClose={() => setExpandedStoragePlayer(null)}
-        />
-      )}
+      {activeModal?.type === "combinedDiscard" && <MobileDiscardModal />}
+      {magicHandChoice && <MagicHandChoiceModal />}
+      {activeReveal && <RevealModal />}
+      {activeModal?.type === "expandedCard" && <ExpandedCardModal />}
+      {activeModal?.type === "tableLog" && <TableLogModal />}
+      {activeModal?.type === "seatingOrder" && <SeatingOrderModal />}
+      {activeModal?.type === "storage" && <StorageModal />}
 
       <button className="exit-table-button compact-exit-button" onClick={leaveTable}>Leave Table</button>
     </main>
+  );
+};
+
+export const Game = ({ socket, name, room, setRoom }) => {
+  const { roomCode } = useParams();
+  return (
+    <GameProvider socket={socket} name={name} room={room} setRoom={setRoom} roomCode={roomCode}>
+      <GameLayout />
+    </GameProvider>
   );
 };

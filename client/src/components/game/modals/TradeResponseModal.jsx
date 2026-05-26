@@ -1,19 +1,22 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { usePairedCardSelection } from "../../../hooks/useCardSelection.js";
 import { TradeOffer } from "../panels/TradeOffer.jsx";
 import { SelectableOfferGrid } from "./SelectableOfferGrid.jsx";
 
-export const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm }) => {
+export const TradeResponseModal = () => {
+  const { gameState, closeModal, respondTrade } = useGame();
+  const { activeTrade: trade } = gameState;
   const { selectedHandIds, selectedStorageIds, toggleHand, toggleStorage } = usePairedCardSelection(4);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <section className="trade-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Respond to trade</p>
             <h2>{trade.initiatorName}'s offer</h2>
           </div>
-          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={onClose}>✕</button>
+          <button className="ghost-button close-modal-button desktop-modal-close-button" onClick={closeModal}>✕</button>
         </div>
 
         {trade.bindingUsed && (
@@ -30,8 +33,6 @@ export const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm })
         />
         <h3>Select 0 to 4 cards to offer back</h3>
         <SelectableOfferGrid
-          hand={hand}
-          storage={storage}
           selectedHandIds={selectedHandIds}
           selectedStorageIds={selectedStorageIds}
           onToggleHand={toggleHand}
@@ -40,11 +41,11 @@ export const TradeResponseModal = ({ hand, storage, trade, onClose, onConfirm })
 
         <button
           className="gold-button modal-confirm-button"
-          onClick={() => onConfirm({ cardIds: selectedHandIds, storageCardIds: selectedStorageIds })}
+          onClick={() => respondTrade({ cardIds: selectedHandIds, storageCardIds: selectedStorageIds })}
         >
           Send Response
         </button>
-        <button type="button" className="ghost-button modal-secondary-close" onClick={onClose}>
+        <button type="button" className="ghost-button modal-secondary-close" onClick={closeModal}>
           Close
         </button>
       </section>

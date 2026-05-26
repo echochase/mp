@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { containedGoldSx, outlinedRedSx, fieldSx, titleGradientSx } from "../styles/theme.js";
 
 export const EnterDetails = ({ socket, name, setName, room, setRoom, creating }) => {
   const navigate = useNavigate();
@@ -82,14 +83,6 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
     };
   }, [socket, room, name, navigate, setRoom, setName]);
 
-  const fieldSx = {
-    "& .MuiInput-root": { color: "#e8e4dc", fontFamily: "'Crimson Pro', serif", fontSize: "1.1rem" },
-    "& .MuiInput-underline:before": { borderBottomColor: "rgba(255,255,255,0.15)" },
-    "& .MuiInput-underline:hover:before": { borderBottomColor: "rgba(201,168,76,0.5)" },
-    "& .MuiInput-underline:after": { borderBottomColor: "#c9a84c" },
-    "& .MuiInputLabel-root": { color: "#8a8f9e", fontFamily: "'Crimson Pro', serif" },
-    "& .MuiInputLabel-root.Mui-focused": { color: "#c9a84c" },
-  };
 
   return (
     <Box
@@ -104,15 +97,7 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
       <Typography
         variant="h4"
         mb={4}
-        sx={{
-          fontFamily: "'Cinzel', serif",
-          fontWeight: 700,
-          letterSpacing: "0.06em",
-          background: "linear-gradient(135deg, #e8c97a, #c9a84c)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          backgroundClip: "text",
-        }}
+        sx={{ ...titleGradientSx, fontWeight: 700, letterSpacing: "0.06em" }}
       >
         {creating ? "Create a Room" : "Join a Room"}
       </Typography>
@@ -172,33 +157,14 @@ export const EnterDetails = ({ socket, name, setName, room, setRoom, creating })
             <Button
               variant="outlined"
               onClick={() => navigate("/")}
-              sx={{
-                fontFamily: "'Cinzel', serif",
-                letterSpacing: "0.06em",
-                textTransform: "none",
-                borderRadius: "8px",
-                px: 3,
-                borderColor: "rgba(199,63,63,0.5)",
-                color: "#e57373",
-                "&:hover": { borderColor: "#e57373", backgroundColor: "rgba(199,63,63,0.08)" },
-              }}
+              sx={{ ...outlinedRedSx, px: 3 }}
             >
               Back
             </Button>
             <Button
               type="submit"
               variant="contained"
-              sx={{
-                fontFamily: "'Cinzel', serif",
-                letterSpacing: "0.06em",
-                textTransform: "none",
-                borderRadius: "8px",
-                px: 3,
-                background: "linear-gradient(135deg, #c9a84c, #a07830)",
-                color: "#080a0f",
-                fontWeight: 700,
-                "&:hover": { background: "linear-gradient(135deg, #e8c97a, #c9a84c)" },
-              }}
+              sx={{ ...containedGoldSx, px: 3 }}
             >
               {creating ? "Create" : "Join"}
             </Button>

@@ -1,6 +1,10 @@
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { imageMap } from "../../../utils/images.js";
 
-export const DrawDeck = ({ count = 0 }) => {
+export const DrawDeck = () => {
+  const { gameState } = useGame();
+
+  const count = gameState.deckCounts?.playing ?? 0;
   const backSrc = imageMap["card-back"];
 
   return (

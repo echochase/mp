@@ -1,35 +1,28 @@
 import { useState } from "react";
+import { useGame } from "../../../contexts/GameContext.jsx";
 import { TablePlayerChip } from "./TablePlayerChip.jsx";
 import { StorageCards } from "./StorageCards.jsx";
 import { TableDiscardPile } from "./TableDiscardPile.jsx";
 import { DrawDeck } from "./DrawDeck.jsx";
-import { MobilePendingActionInPlaySpace } from "./MobilePendingActionInPlaySpace.jsx";
-import { MobileResolvedActionInPlaySpace } from "./MobileResolvedActionInPlaySpace.jsx";
+import { MobilePendingActionPanel } from "../mobile/MobilePendingActionPanel.jsx";
+import { MobileResolvedActionPanel } from "../mobile/MobileResolvedActionPanel.jsx";
+import { MobileTableDashboard } from "../mobile/MobileTableDashboard.jsx";
 
-export const TableTopView = ({
-  players,
-  me,
-  currentPlayerName,
-  meName,
-  discardPile,
-  deckCounts,
-  canStoreDraggedResource,
-  onStoreResourceDrop,
-  onOpenCardDiscard,
-  onOpenGoalDiscard,
-  canPlayDraggedAction,
-  onActionCardDrop,
-  pendingAction,
-  resolvedMobileAction,
-  now,
-  reactionHand = [],
-  onReact,
-  onOpenStorage,
-  mobileDashboard,
-}) => {
+export const TableTopView = () => {
+  const {
+    gameState, me, name,
+    sortedHand, canStoreResourceCard, canPlayActionCard,
+    handleResourceDrop, handleActionDrop, openModal,
+    resolvedMobileAction,
+  } = useGame();
+
   const [isPlaySpaceDragOver, setIsPlaySpaceDragOver] = useState(false);
   const [isStorageDragOver, setIsStorageDragOver] = useState(false);
-  const opponents = players.filter((p) => p.name !== meName);
+
+  const { players, currentPlayerName, pendingAction } = gameState;
+  const canStoreDraggedResource = sortedHand.some(canStoreResourceCard);
+  const canPlayDraggedAction = sortedHand.some(canPlayActionCard);
+  const opponents = players.filter((p) => p.name !== name);
   const hasOddOpponentSlot = opponents.length > 0 && opponents.length % 2 === 1;
   const colTemplate = `repeat(${Math.max(opponents.length, 1)}, 1fr)`;
   const opponentZonesClassName = [
@@ -53,7 +46,7 @@ export const TableTopView = ({
               <button
                 className="mobile-storage-expand-button"
                 type="button"
-                onClick={() => onOpenStorage?.(player)}
+                onClick={() => openModal("storage", { player })}
               >
                 Expand
               </button>
@@ -70,15 +63,15 @@ export const TableTopView = ({
         {/* Table centre — draw deck + two discard piles */}
         <div className="tabletop-center">
           <TableDiscardPile
-            cards={discardPile?.goals || []}
+            cards={gameState.discardPile?.goals}
             label="Goal Discard"
-            onOpen={onOpenGoalDiscard}
+            onOpen={() => openModal("goalDiscard")}
           />
-          <DrawDeck count={deckCounts?.playing ?? 0} />
+          <DrawDeck />
           <TableDiscardPile
-            cards={discardPile?.playing || []}
+            cards={gameState.discardPile?.playing}
             label="Card Discard"
-            onOpen={onOpenCardDiscard}
+            onOpen={() => openModal("discardPile")}
           />
         </div>
 
@@ -103,19 +96,13 @@ export const TableTopView = ({
             const cardId =
               event.dataTransfer.getData("application/x-mp-action-card-id") ||
               event.dataTransfer.getData("text/plain");
-            if (cardId) onActionCardDrop?.(cardId);
+            if (cardId) handleActionDrop(cardId);
           }}
         >
           {pendingAction ? (
-            <MobilePendingActionInPlaySpace
-              pendingAction={pendingAction}
-              me={me}
-              now={now}
-              reactionHand={reactionHand}
-              onReact={onReact}
-            />
+            <MobilePendingActionPanel />
           ) : resolvedMobileAction ? (
-            <MobileResolvedActionInPlaySpace card={resolvedMobileAction.card} />
+            <MobileResolvedActionPanel />
           ) : (
             <>
               <strong>Play Space</strong>
@@ -124,11 +111,9 @@ export const TableTopView = ({
           )}
         </div>
 
-        {mobileDashboard && (
-          <div className="mobile-table-dashboard-shell">
-            {mobileDashboard}
-          </div>
-        )}
+        <div className="mobile-table-dashboard-shell">
+          <MobileTableDashboard />
+        </div>
 
         {/* My storage zone */}
         <div
@@ -154,12 +139,12 @@ export const TableTopView = ({
             const cardId =
               event.dataTransfer.getData("application/x-mp-resource-card-id") ||
               event.dataTransfer.getData("text/plain");
-            if (cardId) onStoreResourceDrop(cardId);
+            if (cardId) handleResourceDrop(cardId);
           }}
         >
           <p className="tabletop-zone-label">Your Storage</p>
           {canStoreDraggedResource && <p className="storage-drop-hint">Drag resources here to store them.</p>}
-          <StorageCards cards={me?.storage || []} paginate={false} />
+          <StorageCards cards={me?.storage} paginate={false} />
         </div>
       </div>
     </div>
