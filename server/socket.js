@@ -623,10 +623,10 @@ module.exports = function(io) {
       broadcastGameState(room);
     });
 
-    socket.on('accept-trade', (room) => {
+    socket.on('accept-trade', (room, payload) => {
       const roomData = rooms[room];
       if (!roomData) return;
-      const result = acceptTrade(roomData, socket.id);
+      const result = acceptTrade(roomData, socket.id, payload || {});
       if (!result.ok) socket.emit('game-error', result.message);
       broadcastGameState(room);
     });
@@ -1305,6 +1305,7 @@ function createTrade(roomData, socketId, payload) {
     initiatorName: player.name,
     targetName: target?.name || null,
     responderName: null,
+    responses: [],
     initiatorOfferIds: offer.handIds,
     initiatorStorageOfferIds: offer.storageIds,
     responderOfferIds: [],
@@ -1348,24 +1349,48 @@ function respondTrade(roomData, socketId, payload) {
   const offer = getTradeOffer(player, payload);
   if (!offer.ok) return offer;
 
-  trade.state = 'configured';
-  trade.responderName = player.name;
-  trade.responderOfferIds = offer.handIds;
-  trade.responderStorageOfferIds = offer.storageIds;
-  trade.responderOfferSnapshot = offer.cards;
-  trade.responderOfferHandSnapshot = offer.handPreviewCards;
-  trade.responderOfferStorageSnapshot = offer.storagePreviewCards;
-  roomData.log.push(`${player.name} responded with ${formatCardList(offer.cards)}.`);
-  pushNotice(roomData, `${player.name} responded to the trade.`, 'trade');
+  const existing = trade.responses.findIndex((r) => r.responderName === player.name);
+  const response = {
+    responderName: player.name,
+    offerIds: offer.handIds,
+    storageOfferIds: offer.storageIds,
+    offerSnapshot: offer.cards,
+    offerHandSnapshot: offer.handPreviewCards,
+    offerStorageSnapshot: offer.storagePreviewCards,
+  };
+  if (existing !== -1) {
+    trade.responses[existing] = response;
+    roomData.log.push(`${player.name} updated their trade offer to ${formatCardList(offer.cards)}.`);
+    pushNotice(roomData, `${player.name} updated their trade offer.`, 'trade');
+  } else {
+    trade.responses.push(response);
+    roomData.log.push(`${player.name} responded with ${formatCardList(offer.cards)}.`);
+    pushNotice(roomData, `${player.name} responded to the trade.`, 'trade');
+  }
   return ok();
 }
 
-function acceptTrade(roomData, socketId) {
+function acceptTrade(roomData, socketId, payload = {}) {
   const player = roomData.players.find((p) => p.socketId === socketId);
   const trade = roomData.activeTrade;
   if (!player) return fail('You are not in this room.');
-  if (!trade || trade.state !== 'configured') return fail('There is no configured trade to accept.');
+  if (!trade || trade.state !== 'open') return fail('There is no open trade to accept.');
   if (trade.initiatorName !== player.name) return fail('Only the trade initiator can accept this trade.');
+  if (!trade.responses?.length) return fail('No one has responded to this trade yet.');
+
+  const responderName = payload.responderName;
+  const chosen = responderName
+    ? trade.responses.find((r) => r.responderName === responderName)
+    : trade.responses[0];
+  if (!chosen) return fail('That player has not responded to this trade.');
+
+  // Populate single-responder fields from the chosen response for the rest of the flow
+  trade.responderName = chosen.responderName;
+  trade.responderOfferIds = chosen.offerIds;
+  trade.responderStorageOfferIds = chosen.storageOfferIds;
+  trade.responderOfferSnapshot = chosen.offerSnapshot;
+  trade.responderOfferHandSnapshot = chosen.offerHandSnapshot;
+  trade.responderOfferStorageSnapshot = chosen.offerStorageSnapshot;
 
   const initiator = player;
   const responder = roomData.players.find((p) => p.name === trade.responderName);
@@ -1426,11 +1451,20 @@ function declineTrade(roomData, socketId) {
   if (!player) return fail('You are not in this room.');
   if (!trade) return fail('There is no active trade to decline.');
   if (trade.state === 'scamWindow') return fail('The trade was already accepted. Wait for the scam window to close.');
-  if (![trade.initiatorName, trade.responderName].includes(player.name)) return fail('You are not part of this trade.');
+  const hasResponse = trade.responses?.some((r) => r.responderName === player.name);
+  if (player.name !== trade.initiatorName && !hasResponse) return fail('You are not part of this trade.');
 
-  roomData.log.push(`${player.name} cancelled the trade.`);
-  pushNotice(roomData, `${player.name} cancelled the trade.`, 'trade');
-  roomData.activeTrade = null;
+  if (player.name === trade.initiatorName) {
+    // Initiator cancels the entire trade
+    roomData.log.push(`${player.name} cancelled the trade.`);
+    pushNotice(roomData, `${player.name} cancelled the trade.`, 'trade');
+    roomData.activeTrade = null;
+  } else {
+    // Responder withdraws their offer
+    trade.responses = trade.responses.filter((r) => r.responderName !== player.name);
+    roomData.log.push(`${player.name} withdrew their trade offer.`);
+    pushNotice(roomData, `${player.name} withdrew their trade offer.`, 'trade');
+  }
   return ok();
 }
 
@@ -2039,6 +2073,12 @@ function sanitiseTrade(trade) {
     initiatorName: trade.initiatorName,
     targetName: trade.targetName,
     responderName: trade.responderName,
+    responses: (trade.responses || []).map((r) => ({
+      responderName: r.responderName,
+      offer: r.offerSnapshot || [],
+      offerHand: r.offerHandSnapshot || [],
+      offerStorage: r.offerStorageSnapshot || [],
+    })),
     initiatorOffer: trade.initiatorOfferSnapshot || trade.initiatorOfferCards || [],
     initiatorOfferHand: trade.initiatorOfferHandSnapshot || trade.initiatorOfferHandCards || [],
     initiatorOfferStorage: trade.initiatorOfferStorageSnapshot || trade.initiatorOfferStorageCards || [],
@@ -2084,13 +2124,20 @@ function handlePlayerLeftActiveFlow(roomData, playerName) {
     roomData.log.push(`The pending card choice was cancelled because ${playerName} left.`);
   }
   const trade = roomData.activeTrade;
-  if (trade && [trade.initiatorName, trade.responderName].includes(playerName)) {
-    if (trade.state === 'scamWindow') {
+  if (trade) {
+    if (trade.state === 'scamWindow' && [trade.initiatorName, trade.responderName].includes(playerName)) {
       finalizeScamWindow(roomData, trade.id);
-    } else {
+    } else if (trade.initiatorName === playerName) {
       if (trade.timer) clearTimeout(trade.timer);
       roomData.activeTrade = null;
       roomData.log.push(`The active trade was cancelled because ${playerName} left.`);
+    } else {
+      // Remove departing player's response if they had one
+      const before = trade.responses?.length || 0;
+      trade.responses = (trade.responses || []).filter((r) => r.responderName !== playerName);
+      if (trade.responses.length < before) {
+        roomData.log.push(`${playerName}'s trade response was withdrawn because they left.`);
+      }
     }
   }
 }

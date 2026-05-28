@@ -2,13 +2,13 @@ import { CardFace } from "../cards/CardFace.jsx";
 
 export const TradeOffer = ({ title, cards = [], handCards, storageCards }) => {
   const hasPartition = Boolean(handCards || storageCards || cards.some((card) => card.tradeZone));
-  const handOffer = handCards || cards.filter((card) => card.tradeZone === "hand");
-  const storageOffer = storageCards || cards.filter((card) => card.tradeZone === "storage");
+  const handOffer = (handCards || cards.filter((card) => card.tradeZone === "hand")).slice(0, 4);
+  const storageOffer = (storageCards || cards.filter((card) => card.tradeZone === "storage")).slice(0, 4);
 
   if (!hasPartition) {
     return (
       <div className="trade-offer-box">
-        <strong>{title}</strong>
+        {title && <strong>{title}</strong>}
         <div className="trade-card-row">
           {cards.length === 0 ? (
             <span className="empty-storage">Nothing</span>
@@ -22,7 +22,7 @@ export const TradeOffer = ({ title, cards = [], handCards, storageCards }) => {
 
   return (
     <div className="trade-offer-box partitioned-trade-offer-box">
-      <strong>{title}</strong>
+      {title && <strong>{title}</strong>}
       <div className="trade-offer-zone">
         <span className="trade-offer-zone-label">To hand</span>
         <div className="trade-card-row">

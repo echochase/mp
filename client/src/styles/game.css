@@ -1538,7 +1538,35 @@ button:disabled {
 
 .partitioned-trade-offer-box {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 9px;
+}
+
+.partitioned-trade-offer-box > strong {
+  grid-column: 1 / -1;
+}
+
+.partitioned-trade-offer-box .trade-card-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.partitioned-trade-offer-box .trade-offer-zone:first-of-type {
+  padding-right: 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.partitioned-trade-offer-box .trade-card-row .card-face-button {
+  width: calc((100% - 3 * 10px) / 4 - 12px);
+  flex-shrink: 0;
+}
+
+.partitioned-trade-offer-box .trade-card-row .empty-storage {
+  width: 100%;
+  text-align: center;
 }
 
 .trade-offer-zone {
@@ -1615,6 +1643,259 @@ button:disabled {
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* ── Trade Details Modal redesign ── */
+
+.trade-details-modal .trade-offer-box {
+  border: none;
+  background: none;
+  padding: 0;
+  min-height: 0;
+}
+
+.tdm-section {
+  margin-top: 14px;
+}
+
+.tdm-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.tdm-section-label .player-avatar {
+  flex-shrink: 0;
+}
+
+.tdm-exchange-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 0;
+  color: rgba(201, 168, 76, 0.35);
+  font-size: 1.1rem;
+}
+
+.tdm-exchange-divider::before,
+.tdm-exchange-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tdm-responses-section {
+  margin-top: 14px;
+}
+
+.tdm-responses-header {
+  margin: 0 0 10px;
+}
+
+.tdm-empty-responses {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.tdm-response-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tdm-response-card {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s;
+}
+
+.tdm-response-card-mine {
+  border-color: rgba(201, 168, 76, 0.22);
+  background: rgba(201, 168, 76, 0.04);
+}
+
+.tdm-response-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tdm-response-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tdm-response-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tdm-my-offer-tag {
+  padding: 0.15em 0.55em;
+  border-radius: 999px;
+  background: rgba(201, 168, 76, 0.15);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  color: var(--gold-light);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tdm-response-card-footer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tdm-accept-btn {
+  width: 100%;
+  padding: 0.55em 1em;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 10px;
+  background: rgba(201, 168, 76, 0.08);
+  color: var(--gold-light);
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tdm-accept-btn:hover {
+  background: rgba(201, 168, 76, 0.18);
+  border-color: rgba(201, 168, 76, 0.7);
+  color: #fff;
+}
+
+.tdm-response-card-actionable:hover {
+  border-color: rgba(201, 168, 76, 0.25);
+}
+
+.tdm-scam-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(199, 63, 63, 0.3);
+  background: rgba(199, 63, 63, 0.07);
+}
+
+.tdm-scam-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tdm-scam-label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tdm-scam-banner strong {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #e07070;
+}
+
+.tdm-scam-played {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.tdm-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tdm-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.5em 1.1em;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tdm-action-btn span {
+  color: inherit;
+}
+
+.tdm-action-btn-neutral {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.tdm-action-btn-neutral:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.tdm-action-btn-danger {
+  border: 1px solid rgba(199, 63, 63, 0.35);
+  background: rgba(199, 63, 63, 0.07);
+  color: #e07070;
+}
+
+.tdm-action-btn-danger:hover {
+  border-color: rgba(199, 63, 63, 0.65);
+  background: rgba(199, 63, 63, 0.15);
+  color: #f09090;
+}
+
+.tdm-action-btn-scam {
+  border: 1px solid rgba(199, 63, 63, 0.5);
+  background: rgba(199, 63, 63, 0.12);
+  color: #e07070;
+}
+
+.tdm-action-btn-scam:hover:not(:disabled) {
+  border-color: rgba(199, 63, 63, 0.8);
+  background: rgba(199, 63, 63, 0.22);
+  color: #f09090;
+}
+
+.tdm-action-btn-scam:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .action-modal,
