@@ -273,7 +273,7 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 5,
     description: 'Collect 7 different resource cards in your storage.',
-    custom: 'sevenDifferentResources',
+    minUniqueResources: 7,
   },
   {
     key: 'wizard',
@@ -281,7 +281,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 4,
     description: "Use Oracle's Power or Total Renewal.",
-    custom: 'usedOracleOrRenewal',
   },
   {
     key: 'jeweller',
@@ -297,7 +296,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 3,
     description: 'Use Magic Hand to take a Gold or Diamond from the discard pile.',
-    custom: 'fishingForGold',
   },
   {
     key: 'jewelleryCollector',
@@ -329,7 +327,6 @@ const GOAL_CARD_DEFS = [
     count: 3,
     points: 1,
     description: "Trade with another player without using an It's a Scam card.",
-    custom: 'cleanTrade',
   },
   {
     key: 'robinHood',
@@ -337,7 +334,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 2,
     description: 'Use Theft or Robbery on the player with the most resource cards in their storage.',
-    custom: 'robinHoodHit',
   },
   {
     key: 'lawEnforcer',
@@ -345,7 +341,6 @@ const GOAL_CARD_DEFS = [
     count: 2,
     points: 2,
     description: "Use I Think Not or Absolutely Not on another player's It's a Scam card.",
-    custom: 'stoppedScam',
   },
   {
     key: 'action-ready',
@@ -628,10 +623,10 @@ module.exports = function(io) {
       broadcastGameState(room);
     });
 
-    socket.on('accept-trade', (room) => {
+    socket.on('accept-trade', (room, payload) => {
       const roomData = rooms[room];
       if (!roomData) return;
-      const result = acceptTrade(roomData, socket.id);
+      const result = acceptTrade(roomData, socket.id, payload || {});
       if (!result.ok) socket.emit('game-error', result.message);
       broadcastGameState(room);
     });
@@ -987,8 +982,8 @@ function cancelPendingCard(roomData, targetPending, options = {}) {
   roomData.playDiscard.push(targetPending.card);
   const cancellingPlayer = options.cancellingPlayer || null;
   if (targetPending.card.key === 'itsAScam' && cancellingPlayer) {
-    cancellingPlayer.flags = cancellingPlayer.flags || {};
-    cancellingPlayer.flags.stoppedScam = true;
+    const goalIndex = (cancellingPlayer.goals || []).findIndex((g) => g.key === 'lawEnforcer');
+    if (goalIndex !== -1) completeGoal(roomData, cancellingPlayer, goalIndex);
   }
 
   if (targetPending.card.key === 'iThinkNot' && targetPending.targetPending) {
@@ -1060,7 +1055,7 @@ function resolveStandardPendingAction(roomData, pending) {
   actor.actionPlayed = true;
   roomData.log.push(`${actor.name}'s ${pending.card.name} resolved${result.logSuffix || ''}.`);
   if (!roomData.pendingChoice) pushNotice(roomData, `${actor.name}'s ${pending.card.name} resolved.`, 'action');
-  markGoalFlags(roomData, actor, pending.card, pending.payload);
+  completeActionBasedGoals(roomData, actor, pending.card, pending.payload);
 }
 
 function finalizePendingAction(roomData, pendingId) {
@@ -1310,6 +1305,7 @@ function createTrade(roomData, socketId, payload) {
     initiatorName: player.name,
     targetName: target?.name || null,
     responderName: null,
+    responses: [],
     initiatorOfferIds: offer.handIds,
     initiatorStorageOfferIds: offer.storageIds,
     responderOfferIds: [],
@@ -1353,24 +1349,48 @@ function respondTrade(roomData, socketId, payload) {
   const offer = getTradeOffer(player, payload);
   if (!offer.ok) return offer;
 
-  trade.state = 'configured';
-  trade.responderName = player.name;
-  trade.responderOfferIds = offer.handIds;
-  trade.responderStorageOfferIds = offer.storageIds;
-  trade.responderOfferSnapshot = offer.cards;
-  trade.responderOfferHandSnapshot = offer.handPreviewCards;
-  trade.responderOfferStorageSnapshot = offer.storagePreviewCards;
-  roomData.log.push(`${player.name} responded with ${formatCardList(offer.cards)}.`);
-  pushNotice(roomData, `${player.name} responded to the trade.`, 'trade');
+  const existing = trade.responses.findIndex((r) => r.responderName === player.name);
+  const response = {
+    responderName: player.name,
+    offerIds: offer.handIds,
+    storageOfferIds: offer.storageIds,
+    offerSnapshot: offer.cards,
+    offerHandSnapshot: offer.handPreviewCards,
+    offerStorageSnapshot: offer.storagePreviewCards,
+  };
+  if (existing !== -1) {
+    trade.responses[existing] = response;
+    roomData.log.push(`${player.name} updated their trade offer to ${formatCardList(offer.cards)}.`);
+    pushNotice(roomData, `${player.name} updated their trade offer.`, 'trade');
+  } else {
+    trade.responses.push(response);
+    roomData.log.push(`${player.name} responded with ${formatCardList(offer.cards)}.`);
+    pushNotice(roomData, `${player.name} responded to the trade.`, 'trade');
+  }
   return ok();
 }
 
-function acceptTrade(roomData, socketId) {
+function acceptTrade(roomData, socketId, payload = {}) {
   const player = roomData.players.find((p) => p.socketId === socketId);
   const trade = roomData.activeTrade;
   if (!player) return fail('You are not in this room.');
-  if (!trade || trade.state !== 'configured') return fail('There is no configured trade to accept.');
+  if (!trade || trade.state !== 'open') return fail('There is no open trade to accept.');
   if (trade.initiatorName !== player.name) return fail('Only the trade initiator can accept this trade.');
+  if (!trade.responses?.length) return fail('No one has responded to this trade yet.');
+
+  const responderName = payload.responderName;
+  const chosen = responderName
+    ? trade.responses.find((r) => r.responderName === responderName)
+    : trade.responses[0];
+  if (!chosen) return fail('That player has not responded to this trade.');
+
+  // Populate single-responder fields from the chosen response for the rest of the flow
+  trade.responderName = chosen.responderName;
+  trade.responderOfferIds = chosen.offerIds;
+  trade.responderStorageOfferIds = chosen.storageOfferIds;
+  trade.responderOfferSnapshot = chosen.offerSnapshot;
+  trade.responderOfferHandSnapshot = chosen.offerHandSnapshot;
+  trade.responderOfferStorageSnapshot = chosen.offerStorageSnapshot;
 
   const initiator = player;
   const responder = roomData.players.find((p) => p.name === trade.responderName);
@@ -1406,10 +1426,10 @@ function acceptTrade(roomData, socketId) {
   roomData.log.push(`${initiator.name} accepted ${responder.name}'s trade.`);
 
   if (trade.bindingUsed) {
-    initiator.flags = initiator.flags || {};
-    responder.flags = responder.flags || {};
-    initiator.flags.cleanTrade = true;
-    responder.flags.cleanTrade = true;
+    const initiatorGoalIndex = (initiator.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (initiatorGoalIndex !== -1) completeGoal(roomData, initiator, initiatorGoalIndex);
+    const responderGoalIndex = (responder.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (responderGoalIndex !== -1) completeGoal(roomData, responder, responderGoalIndex);
     roomData.log.push('Binding Contract: no scam window.');
     pushNotice(roomData, 'Protected trade completed.', 'trade');
     roomData.activeTrade = null;
@@ -1431,11 +1451,20 @@ function declineTrade(roomData, socketId) {
   if (!player) return fail('You are not in this room.');
   if (!trade) return fail('There is no active trade to decline.');
   if (trade.state === 'scamWindow') return fail('The trade was already accepted. Wait for the scam window to close.');
-  if (![trade.initiatorName, trade.responderName].includes(player.name)) return fail('You are not part of this trade.');
+  const hasResponse = trade.responses?.some((r) => r.responderName === player.name);
+  if (player.name !== trade.initiatorName && !hasResponse) return fail('You are not part of this trade.');
 
-  roomData.log.push(`${player.name} cancelled the trade.`);
-  pushNotice(roomData, `${player.name} cancelled the trade.`, 'trade');
-  roomData.activeTrade = null;
+  if (player.name === trade.initiatorName) {
+    // Initiator cancels the entire trade
+    roomData.log.push(`${player.name} cancelled the trade.`);
+    pushNotice(roomData, `${player.name} cancelled the trade.`, 'trade');
+    roomData.activeTrade = null;
+  } else {
+    // Responder withdraws their offer
+    trade.responses = trade.responses.filter((r) => r.responderName !== player.name);
+    roomData.log.push(`${player.name} withdrew their trade offer.`);
+    pushNotice(roomData, `${player.name} withdrew their trade offer.`, 'trade');
+  }
   return ok();
 }
 
@@ -1492,10 +1521,10 @@ function finalizeScamWindow(roomData, tradeId) {
   }
 
   if (!initiatorScammed && !responderScammed) {
-    initiator.flags = initiator.flags || {};
-    responder.flags = responder.flags || {};
-    initiator.flags.cleanTrade = true;
-    responder.flags.cleanTrade = true;
+    const initiatorGoalIndex = (initiator.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (initiatorGoalIndex !== -1) completeGoal(roomData, initiator, initiatorGoalIndex);
+    const responderGoalIndex = (responder.goals || []).findIndex((g) => g.key === 'businessPartners');
+    if (responderGoalIndex !== -1) completeGoal(roomData, responder, responderGoalIndex);
     roomData.log.push(`${initiator.name} and ${responder.name} completed a clean trade.`);
   } else if (initiatorScammed && responderScammed) {
     roomData.log.push('Both players scammed. Each player took back their offered cards.');
@@ -1532,13 +1561,8 @@ function chooseDiscardCard(roomData, socketId, payload) {
   const [chosen] = roomData.playDiscard.splice(discardIndex, 1);
   player.hand.push(chosen);
   if (chosen.key === 'gold' || chosen.key === 'diamond') {
-    player.flags = player.flags || {};
-    const previousFishingCount = typeof player.flags.fishingForGold === 'number'
-      ? player.flags.fishingForGold
-      : player.flags.fishingForGold
-        ? 1
-        : 0;
-    player.flags.fishingForGold = previousFishingCount + 1;
+    const goalIndex = (player.goals || []).findIndex((g) => g.key === 'fishingForGold');
+    if (goalIndex !== -1) completeGoal(roomData, player, goalIndex);
   }
   roomData.pendingChoice = null;
   roomData.log.push(`${player.name} took ${chosen.name} from the discard pile with Magic Hand.`);
@@ -1754,15 +1778,6 @@ function calculateInvestorPoints(moneyCount) {
 function completeGoal(roomData, player, goalIndex, scoreOverride, logDetail = '') {
   const [completed] = player.goals.splice(goalIndex, 1);
   const points = Number.isFinite(scoreOverride) ? scoreOverride : completed.points || 1;
-  if (completed.custom === 'fishingForGold' && player.flags) {
-    const fishingCount = typeof player.flags.fishingForGold === 'number'
-      ? player.flags.fishingForGold
-      : player.flags.fishingForGold
-        ? 1
-        : 0;
-    player.flags.fishingForGold = Math.max(0, fishingCount - 1);
-  }
-
   player.score += points;
   if (!player.completedGoals) player.completedGoals = [];
   player.completedGoals.push({ ...completed, pointsAwarded: points });
@@ -1796,16 +1811,15 @@ function autoCompleteGoals(roomData, player) {
   }
 }
 
-function markGoalFlags(roomData, player, card, payload) {
-  player.flags = player.flags || {};
+function completeActionBasedGoals(roomData, player, card, payload) {
   if (card.key === 'oraclesPower' || card.key === 'totalRenewal') {
-    player.flags.usedOracleOrRenewal = true;
+    const goalIndex = (player.goals || []).findIndex((g) => g.key === 'wizard');
+    if (goalIndex !== -1) completeGoal(roomData, player, goalIndex);
   }
 
-  if ((card.key === 'theft' || card.key === 'robbery') && payload.targetName) {
-    if (payload.targetHadMostResourcesBeforeAction) {
-      player.flags.robinHoodHit = true;
-    }
+  if ((card.key === 'theft' || card.key === 'robbery') && payload.targetHadMostResourcesBeforeAction) {
+    const goalIndex = (player.goals || []).findIndex((g) => g.key === 'robinHood');
+    if (goalIndex !== -1) completeGoal(roomData, player, goalIndex);
   }
 }
 
@@ -1816,21 +1830,11 @@ function canCompleteGoal(player, goal) {
   if (goal.requirement && !meetsRequirement(counts, goal.requirement)) return false;
   if (goal.anyRequirement && !goal.anyRequirement.some((req) => meetsRequirement(counts, req))) return false;
 
-  if (goal.custom === 'sevenDifferentResources') {
+  if (goal.minUniqueResources) {
     const uniqueResources = new Set(player.storage.filter((c) => c.type === 'resource').map((c) => c.key));
-    return uniqueResources.size >= 7;
+    return uniqueResources.size >= goal.minUniqueResources;
   }
 
-  if (goal.custom === 'fishingForGold') {
-    const fishingCount = typeof player.flags?.fishingForGold === 'number'
-      ? player.flags.fishingForGold
-      : player.flags?.fishingForGold
-        ? 1
-        : 0;
-    return fishingCount > 0;
-  }
-
-  if (goal.custom) return Boolean(player.flags?.[goal.custom]);
   return Boolean(goal.requirement || goal.anyRequirement);
 }
 
@@ -1921,7 +1925,7 @@ function buildDeck(defs) {
         tradeTool: Boolean(def.tradeTool),
         requirement: def.requirement,
         anyRequirement: def.anyRequirement,
-        custom: def.custom,
+        minUniqueResources: def.minUniqueResources,
       });
     }
   }
@@ -2069,6 +2073,12 @@ function sanitiseTrade(trade) {
     initiatorName: trade.initiatorName,
     targetName: trade.targetName,
     responderName: trade.responderName,
+    responses: (trade.responses || []).map((r) => ({
+      responderName: r.responderName,
+      offer: r.offerSnapshot || [],
+      offerHand: r.offerHandSnapshot || [],
+      offerStorage: r.offerStorageSnapshot || [],
+    })),
     initiatorOffer: trade.initiatorOfferSnapshot || trade.initiatorOfferCards || [],
     initiatorOfferHand: trade.initiatorOfferHandSnapshot || trade.initiatorOfferHandCards || [],
     initiatorOfferStorage: trade.initiatorOfferStorageSnapshot || trade.initiatorOfferStorageCards || [],
@@ -2114,13 +2124,20 @@ function handlePlayerLeftActiveFlow(roomData, playerName) {
     roomData.log.push(`The pending card choice was cancelled because ${playerName} left.`);
   }
   const trade = roomData.activeTrade;
-  if (trade && [trade.initiatorName, trade.responderName].includes(playerName)) {
-    if (trade.state === 'scamWindow') {
+  if (trade) {
+    if (trade.state === 'scamWindow' && [trade.initiatorName, trade.responderName].includes(playerName)) {
       finalizeScamWindow(roomData, trade.id);
-    } else {
+    } else if (trade.initiatorName === playerName) {
       if (trade.timer) clearTimeout(trade.timer);
       roomData.activeTrade = null;
       roomData.log.push(`The active trade was cancelled because ${playerName} left.`);
+    } else {
+      // Remove departing player's response if they had one
+      const before = trade.responses?.length || 0;
+      trade.responses = (trade.responses || []).filter((r) => r.responderName !== playerName);
+      if (trade.responses.length < before) {
+        roomData.log.push(`${playerName}'s trade response was withdrawn because they left.`);
+      }
     }
   }
 }

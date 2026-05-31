@@ -5,7 +5,6 @@ import { GameProvider, useGame } from "../contexts/GameContext.jsx";
 import { PlayerAvatar } from "../components/game/PlayerAvatar.jsx";
 import { GoalCard } from "../components/game/cards/GoalCard.jsx";
 import { DesktopPendingActionPanel } from "../components/game/panels/DesktopPendingActionPanel.jsx";
-import { ActiveTradePanel } from "../components/game/panels/ActiveTradePanel.jsx";
 import { CompletedGoalsPanel } from "../components/game/panels/CompletedGoalsPanel.jsx";
 import { HandPanel } from "../components/game/panels/HandPanel.jsx";
 import { MyProgressPanel } from "../components/game/panels/MyProgressPanel.jsx";
@@ -14,6 +13,7 @@ import { SeatingOrder } from "../components/game/table/SeatingOrder.jsx";
 import { ActionTargetModal } from "../components/game/modals/ActionTargetModal.jsx";
 import { TradeBuilderModal } from "../components/game/modals/TradeBuilderModal.jsx";
 import { TradeResponseModal } from "../components/game/modals/TradeResponseModal.jsx";
+import { TradeDetailsModal } from "../components/game/modals/TradeDetailsModal.jsx";
 import { ActionCardSelectionModal } from "../components/game/modals/ActionCardSelectionModal.jsx";
 import { InvestorModal } from "../components/game/modals/InvestorModal.jsx";
 import { DesktopDiscardModal } from "../components/game/modals/DesktopDiscardModal.jsx";
@@ -142,7 +142,6 @@ const GameLayout = () => {
         {/* ── CENTRE ── */}
         <section className="tabletop-column">
           {gameState.pendingAction && <DesktopPendingActionPanel />}
-          {gameState.activeTrade && <ActiveTradePanel />}
           <TableTopView />
           <HandPanel />
         </section>
@@ -217,6 +216,7 @@ const GameLayout = () => {
       {activeModal?.type === "discardPile" && (
         <DesktopDiscardModal cards={gameState.discardPile?.playing || []} title="Card Discard" />
       )}
+      {activeModal?.type === "tradeDetails" && <TradeDetailsModal />}
       {activeModal?.type === "combinedDiscard" && <MobileDiscardModal />}
       {magicHandChoice && <MagicHandChoiceModal />}
       {activeReveal && <RevealModal />}
